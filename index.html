@@ -4,14 +4,38 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Dashboard CP PSI</title>
+    <title>Dashboard Certificaciones PSI</title>
+
+    <link rel="stylesheet" href="style.css">
 </head>
 
 <body>
 
-    <h1>Dashboard de Certificaciones PSI</h1>
+    <main class="container">
 
-    <p>Cargando datos...</p>
+        <header class="header">
+            <div class="header-logo">
+                <img src="images/logo.png" alt="Swagelok Chile">
+                <div class="logo-texto">Swagelok Chile</div>
+            </div>
+
+            <div class="header-info">
+                <h1>Dashboard Certificaciones PSI</h1>
+                <p>Seguimiento automático de certificaciones y fechas de renovación del equipo.</p>
+            </div>
+        </header>
+
+        <section id="resumen" class="resumen"></section>
+
+        <section class="buscador">
+            <input type="text" id="busqueda" placeholder="Buscar por persona, CP o descripción...">
+        </section>
+
+        <section id="personas" class="personas">
+            <p>Cargando datos...</p>
+        </section>
+
+    </main>
 
     <script src="script.js"></script>
 

@@ -1,0 +1,377 @@
+:root {
+    --azul: #003b71;
+    --azul-claro: #0b5fa5;
+    --fondo: #f4f6f8;
+    --tarjeta: #ffffff;
+    --texto: #1f2933;
+    --gris: #6b7280;
+    --borde: #e5e7eb;
+
+    --verde: #22c55e;
+    --amarillo: #facc15;
+    --naranja: #fb923c;
+    --rojo: #ef4444;
+}
+
+*{
+    margin:0;
+    padding:0;
+    box-sizing:border-box;
+}
+
+html{
+    overflow-y: scroll;
+}
+
+body{
+    font-family:Segoe UI,Tahoma,Geneva,Verdana,sans-serif;
+    background:var(--fondo);
+    color:var(--texto);
+    scrollbar-gutter: stable;
+}
+
+.container{
+    width:95%;
+    max-width:1200px;
+    margin:auto;
+    padding:20px 0;
+}
+
+.header{
+    background:linear-gradient(135deg,#003b71,#0b5fa5);
+    color:white;
+    padding:22px 30px;
+    border-radius:18px;
+    margin-bottom:20px;
+    box-shadow:0 8px 20px rgba(0,0,0,.13);
+}
+
+.header{
+    display:flex;
+    align-items:center;
+    gap:34px;
+}
+
+.header-logo{
+    width:210px;
+    flex-shrink:0;
+    text-align:center;
+    border-right:1px solid rgba(255,255,255,.45);
+    padding-right:30px;
+}
+
+.header-logo img{
+    width:180px;
+    max-width:100%;
+    height:auto;
+    display:block;
+    margin:0 auto;
+}
+
+.logo-texto{
+    margin-top:8px;
+    font-size:18px;
+    font-weight:700;
+}
+
+.header-info{
+    flex:1;
+}
+
+.header h1{
+    font-size:42px;
+    margin-bottom:6px;
+}
+
+.header p{
+    font-size:18px;
+}
+
+.resumen{
+    display:grid;
+    grid-template-columns:repeat(4,1fr);
+    gap:18px;
+    margin-bottom:22px;
+}
+
+.resumen-card{
+    background:white;
+    border-radius:16px;
+    padding:18px 22px;
+    box-shadow:0 5px 15px rgba(0,0,0,.08);
+}
+
+.resumen-card span{
+    color:#666;
+    display:block;
+    margin-bottom:8px;
+}
+
+.resumen-card strong{
+    font-size:40px;
+    color:#0b5fa5;
+}
+
+.buscador{
+    margin-bottom:22px;
+}
+
+.buscador input{
+    width:100%;
+    padding:14px 18px;
+    border:1px solid var(--borde);
+    border-radius:14px;
+    font-size:16px;
+    box-shadow:0 4px 12px rgba(0,0,0,.06);
+    outline:none;
+}
+
+.buscador input:focus{
+    border-color:var(--azul-claro);
+    box-shadow:0 0 0 3px rgba(11,95,165,.15);
+}
+
+.personas{
+    display:grid;
+    grid-template-columns:repeat(auto-fit,minmax(450px,1fr));
+    gap:22px;
+}
+
+.persona-card{
+    background:white;
+    border-radius:18px;
+    padding:22px;
+    box-shadow:0 8px 20px rgba(0,0,0,.08);
+    transition:.3s;
+}
+
+.persona-card:hover{
+    transform:translateY(-4px);
+}
+
+.persona-header{
+    display:flex;
+    justify-content:space-between;
+    align-items:flex-start;
+    margin-bottom:12px;
+}
+
+.persona-header h2{
+    color:#003b71;
+    font-size:22px;
+}
+
+.persona-header p{
+    margin-top:6px;
+    color:#666;
+}
+
+.estado-general{
+    padding:8px 15px;
+    border-radius:30px;
+    font-weight:bold;
+    color:white;
+}
+
+.estado-general.vigente{
+    background:var(--verde);
+}
+
+.estado-general.proximo{
+    background:var(--amarillo);
+    color:#333;
+}
+
+.estado-general.urgente{
+    background:var(--naranja);
+}
+
+.estado-general.vencido{
+    background:var(--rojo);
+}
+
+.mini-resumen{
+    display:flex;
+    gap:16px;
+    margin:14px 0;
+    font-size:16px;
+    font-weight:bold;
+}
+
+.accion-card{
+    margin-top:14px;
+    padding:14px 16px;
+    background:#f7f9fc;
+    border-left:5px solid var(--verde);
+    border-radius:12px;
+}
+
+.accion-card.vigente{
+    border-left-color:var(--verde);
+}
+
+.accion-card.proximo{
+    border-left-color:var(--amarillo);
+}
+
+.accion-card.urgente{
+    border-left-color:var(--naranja);
+}
+
+.accion-card.vencido{
+    border-left-color:var(--rojo);
+}
+
+.accion-card span{
+    display:block;
+    font-size:12px;
+    font-weight:700;
+    color:#6b7280;
+    text-transform:uppercase;
+    letter-spacing:.5px;
+    margin-bottom:6px;
+}
+
+.accion-card strong{
+    display:block;
+    font-size:19px;
+    color:#003b71;
+    margin-bottom:5px;
+}
+
+.accion-card p{
+    margin-bottom:6px;
+    color:#1f2933;
+}
+
+.accion-card small{
+    color:#6b7280;
+}
+
+.detalle-btn{
+    width:100%;
+    padding:12px 0;
+    border:none;
+    background:transparent;
+    color:#003b71;
+    cursor:pointer;
+    font-size:16px;
+    font-weight:700;
+    border-top:1px solid #e5e7eb;
+    margin-top:12px;
+    transition:.2s;
+}
+
+.detalle-btn:hover{
+    color:#0b5fa5;
+    background:#f8fafc;
+    border-radius:10px;
+}
+
+.detalle-certificaciones{
+    display:none;
+    margin-top:18px;
+}
+
+.detalle-certificaciones.activo{
+    display:block;
+}
+
+.certificacion{
+    padding:16px;
+    border-radius:12px;
+    margin-bottom:14px;
+    background:#f8fafc;
+    border-left:6px solid #ccc;
+}
+
+.certificacion strong{
+    font-size:18px;
+}
+
+.certificacion p{
+    margin:8px 0;
+}
+
+.certificacion small{
+    color:#666;
+}
+
+.certificacion.vigente{
+    border-left-color:var(--verde);
+}
+
+.certificacion.proximo{
+    border-left-color:var(--amarillo);
+}
+
+.certificacion.urgente{
+    border-left-color:var(--naranja);
+}
+
+.certificacion.vencido{
+    border-left-color:var(--rojo);
+}
+
+.certificacion-footer{
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    margin-top:12px;
+}
+
+.certificacion-footer span{
+    margin:0;
+}
+
+.sin-resultados{
+    background:white;
+    border-radius:16px;
+    padding:24px;
+    color:var(--gris);
+    box-shadow:0 5px 15px rgba(0,0,0,.08);
+}
+
+@media(max-width:900px){
+
+    .resumen{
+        grid-template-columns:repeat(2,1fr);
+    }
+
+    .personas{
+        grid-template-columns:1fr;
+    }
+
+    .header h1{
+        font-size:34px;
+    }
+
+    .header p{
+        font-size:16px;
+    }
+
+}
+
+/* ============================
+   BOTÓN PDF
+============================ */
+
+.btn-pdf{
+    display:inline-flex;
+    align-items:center;
+    gap:6px;
+    padding:8px 14px;
+    background:#003b71;
+    color:white;
+    text-decoration:none;
+    border-radius:8px;
+    font-size:13px;
+    font-weight:600;
+    transition:all .2s ease;
+}
+
+.btn-pdf:hover{
+    background:#0b5fa5;
+    transform:translateY(-2px);
+    box-shadow:0 4px 10px rgba(0,0,0,.15);
+}
