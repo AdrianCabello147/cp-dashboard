@@ -334,20 +334,54 @@ body{
 
 @media(max-width:900px){
 
+    .container{
+        width:100%;
+        padding:14px;
+    }
+
+    .header{
+        display:flex;
+        align-items:center;
+        gap:16px;
+        padding:18px;
+        border-radius:18px;
+        margin-bottom:18px;
+        overflow:hidden;
+    }
+
+    .header-logo{
+        width:135px;
+        padding-right:0;
+        border-right:none;
+        flex-shrink:0;
+    }
+
+    .header-logo img{
+        width:120px;
+    }
+
+    .logo-texto{
+        font-size:16px;
+        margin-top:6px;
+    }
+
+    .header-info h1{
+        font-size:28px;
+        line-height:1.05;
+        margin-bottom:8px;
+    }
+
+    .header-info p{
+        font-size:15px;
+        line-height:1.25;
+    }
+
     .resumen{
         grid-template-columns:repeat(2,1fr);
     }
 
     .personas{
         grid-template-columns:1fr;
-    }
-
-    .header h1{
-        font-size:34px;
-    }
-
-    .header p{
-        font-size:16px;
     }
 
 }
