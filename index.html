@@ -9,7 +9,7 @@
     <link rel="stylesheet" href="style.css?v=1.1">
 </head>
 
-<body>
+<body style="display: none;">
 
     <main class="container">
 
@@ -23,6 +23,8 @@
                 <h1>Dashboard Certificaciones PSI</h1>
                 <p>Seguimiento automático de certificaciones y fechas de renovación del equipo.</p>
             </div>
+
+            <button id="logoutBtn" class="logout-btn">Cerrar sesión</button>
         </header>
 
         <section id="resumen" class="resumen"></section>
@@ -37,6 +39,7 @@
 
     </main>
 
+    <script type="module" src="auth.js"></script>
     <script src="script.js"></script>
 
 </body>

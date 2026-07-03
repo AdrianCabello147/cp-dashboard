@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Login | Portal PSI</title>
+    <link rel="stylesheet" href="style.css?v=1.2">
+</head>
+
+<body class="login-body">
+
+    <main class="login-container">
+        <section class="login-card">
+
+            <div class="login-logo">
+                <img src="images/logo-s.png" alt="Swagelok Chile">
+                <p class="powered-by">Powered by Swagelok Chile</p>
+            </div>
+
+            <h1>Portal PSI</h1>
+            <p class="login-subtitle">Acceso Interno ALTE</p>
+
+            <form id="loginForm" class="login-form">
+                <label for="email">Correo electrónico</label>
+                <input type="email" id="email" placeholder="usuario@alte.cl" required>
+
+                <label for="password">Contraseña</label>
+                <input type="password" id="password" placeholder="Ingresa tu contraseña" required>
+
+                <button type="submit">Ingresar</button>
+            </form>
+
+            <p id="loginError" class="login-error"></p>
+
+        </section>
+    </main>
+
+    <script type="module" src="login.js"></script>
+</body>
+</html>

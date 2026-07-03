@@ -409,3 +409,151 @@ body{
     transform:translateY(-2px);
     box-shadow:0 4px 10px rgba(0,0,0,.15);
 }
+
+/* LOGIN PORTAL PSI */
+
+.login-body {
+    min-height: 100vh;
+    margin: 0;
+    background: linear-gradient(135deg, #f3f6fb 0%, #dfe8f3 100%);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+.login-container {
+    width: min(92vw, 460px);
+}
+
+.login-card {
+    background: #ffffff;
+    border-radius: 22px;
+    padding: 42px 38px;
+
+    box-shadow:
+        0 18px 45px rgba(0,0,0,.10),
+        0 2px 8px rgba(0,0,0,.05);
+
+    text-align: center;
+}
+
+.login-logo img {
+    display: block;
+    width: 120px;
+    height: auto;
+    margin: 0 auto 14px;
+}
+
+.login-logo p {
+    margin: 0 0 24px;
+    font-weight: 600;
+    color: #4b5563;
+}
+
+.login-card h1 {
+    margin: 0;
+    font-size: 42px;
+    font-weight: 700;
+    color: #0b2b5a;
+}
+
+.login-subtitle {
+    margin: 12px 0 30px;
+    color: #4b5563;
+    font-size: 17px;
+    line-height: 1.4;
+}
+
+.login-form {
+    text-align: left;
+}
+
+.login-form label {
+    display: block;
+    margin-bottom: 8px;
+    font-weight: 600;
+    color: #374151;
+    font-size: 15px;
+}
+
+.login-form input {
+    display: block;
+    width: 100%;
+    padding: 16px;
+    margin: 0 0 18px 0;
+    box-sizing: border-box;
+
+    border: 1px solid #d1d5db;
+    border-radius: 10px;
+
+    font-size: 16px;
+    background: #fff;
+}
+
+.login-form input:focus {
+    outline: none;
+    border-color: #005eb8;
+    box-shadow: 0 0 0 3px rgba(0, 94, 184, 0.15);
+}
+
+.login-form button {
+    display: block;
+    width: 100%;
+    padding: 16px;
+    margin-top: 8px;
+
+    background: #005eb8;
+    color: white;
+
+    border: none;
+    border-radius: 10px;
+
+    font-size: 18px;
+    font-weight: 700;
+
+    cursor: pointer;
+    transition: .2s;
+}
+
+.login-form button:hover {
+    background: #004b93;
+}
+
+.login-error {
+    margin-top: 16px;
+    color: #dc2626;
+    font-weight: 600;
+    font-size: 14px;
+}
+
+.powered-by {
+    margin: 0 0 22px;
+    font-size: 15px;
+    color: #6b7280;
+    letter-spacing: .3px;
+}
+
+/* BOTÓN CERRAR SESIÓN */
+
+.logout-btn{
+    background:#ffffff;
+    color:#005eb8;
+
+    border:2px solid rgba(255,255,255,.35);
+    border-radius:12px;
+
+    padding:12px 22px;
+
+    font-size:15px;
+    font-weight:800;
+
+    cursor:pointer;
+
+    transition:.25s;
+}
+
+.logout-btn:hover{
+    background:#f4f8fc;
+    transform:translateY(-2px);
+    box-shadow:0 8px 20px rgba(0,0,0,.18);
+}
