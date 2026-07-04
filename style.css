@@ -557,3 +557,236 @@ body{
     transform:translateY(-2px);
     box-shadow:0 8px 20px rgba(0,0,0,.18);
 }
+
+/* ============================
+   MÓDULOS / NAVEGACIÓN
+============================ */
+
+.module-tabs{
+    display:flex;
+    gap:12px;
+    margin-bottom:22px;
+}
+
+.module-tab{
+    border:none;
+    background:white;
+    color:var(--azul);
+    padding:12px 18px;
+    border-radius:12px;
+    font-weight:800;
+    cursor:pointer;
+    box-shadow:0 4px 12px rgba(0,0,0,.07);
+    transition:.2s;
+}
+
+.module-tab:hover{
+    transform:translateY(-2px);
+}
+
+.module-tab.active{
+    background:var(--azul);
+    color:white;
+}
+
+.module-section{
+    display:none;
+}
+
+.module-section.active{
+    display:block;
+}
+
+/* ============================
+   PRODUCCIÓN
+============================ */
+
+.production-hero{
+    background:white;
+    border-radius:18px;
+    padding:24px;
+    margin-bottom:22px;
+    box-shadow:0 6px 18px rgba(0,0,0,.07);
+}
+
+.production-hero h2{
+    font-size:34px;
+    color:var(--azul);
+    margin-bottom:6px;
+}
+
+.production-hero p{
+    color:var(--gris);
+    font-size:17px;
+}
+
+.production-cards{
+    display:grid;
+    grid-template-columns:repeat(4,1fr);
+    gap:18px;
+    margin-bottom:22px;
+}
+
+.production-card{
+    background:white;
+    border-radius:16px;
+    padding:20px;
+    box-shadow:0 5px 15px rgba(0,0,0,.08);
+}
+
+.production-card span{
+    display:block;
+    color:var(--gris);
+    margin-bottom:8px;
+    font-weight:600;
+}
+
+.production-card strong{
+    font-size:38px;
+    color:var(--azul-claro);
+}
+
+.work-agenda,
+.production-table-section{
+    background:white;
+    border-radius:18px;
+    padding:22px;
+    margin-bottom:22px;
+    box-shadow:0 6px 18px rgba(0,0,0,.07);
+}
+
+.section-title{
+    margin-bottom:16px;
+}
+
+.section-title h3{
+    font-size:22px;
+    color:var(--azul);
+    margin-bottom:4px;
+}
+
+.section-title p{
+    color:var(--gris);
+}
+
+.agenda-list{
+    display:grid;
+    gap:12px;
+}
+
+.agenda-item{
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    padding:16px;
+    border-radius:14px;
+    background:#f8fafc;
+    border-left:6px solid var(--borde);
+}
+
+.agenda-item strong{
+    display:block;
+    font-size:17px;
+    color:var(--texto);
+    margin-bottom:4px;
+}
+
+.agenda-item span{
+    color:var(--gris);
+}
+
+.agenda-item small{
+    font-weight:800;
+    color:var(--azul);
+}
+
+.agenda-item.critical{
+    border-left-color:var(--rojo);
+}
+
+.agenda-item.high{
+    border-left-color:var(--naranja);
+}
+
+.agenda-item.medium{
+    border-left-color:var(--amarillo);
+}
+
+.production-table-wrapper{
+    overflow-x:auto;
+}
+
+.production-table{
+    width:100%;
+    border-collapse:collapse;
+    min-width:980px;
+}
+
+.production-table th{
+    text-align:left;
+    font-size:13px;
+    text-transform:uppercase;
+    letter-spacing:.4px;
+    color:var(--gris);
+    padding:14px 12px;
+    border-bottom:1px solid var(--borde);
+}
+
+.production-table td{
+    padding:15px 12px;
+    border-bottom:1px solid var(--borde);
+    font-size:15px;
+}
+
+.production-table tbody tr:hover{
+    background:#f8fafc;
+}
+
+.badge{
+    display:inline-flex;
+    align-items:center;
+    justify-content:center;
+    padding:6px 10px;
+    border-radius:999px;
+    color:white;
+    font-size:12px;
+    font-weight:800;
+}
+
+.badge.danger{
+    background:var(--rojo);
+}
+
+.badge.warning{
+    background:var(--naranja);
+}
+
+.badge.success{
+    background:var(--verde);
+}
+
+/* ============================
+   RESPONSIVE PRODUCCIÓN
+============================ */
+
+@media screen and (max-width:900px){
+
+    .module-tabs{
+        display:grid;
+        grid-template-columns:1fr 1fr;
+    }
+
+    .production-cards{
+        grid-template-columns:repeat(2,1fr);
+    }
+
+    .agenda-item{
+        align-items:flex-start;
+        gap:12px;
+        flex-direction:column;
+    }
+
+    .production-hero h2{
+        font-size:28px;
+    }
+}

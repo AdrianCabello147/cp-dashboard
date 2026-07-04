@@ -4,9 +4,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Dashboard Certificaciones PSI</title>
+    <title>Dashboard PSI</title>
 
-    <link rel="stylesheet" href="style.css?v=1.1">
+    <link rel="stylesheet" href="style.css?v=1.2">
 </head>
 
 <body style="display: none;">
@@ -20,21 +20,152 @@
             </div>
 
             <div class="header-info">
-                <h1>Dashboard Certificaciones PSI</h1>
-                <p>Seguimiento automático de certificaciones y fechas de renovación del equipo.</p>
+                <h1 id="pageTitle">Dashboard Certificaciones PSI</h1>
+                <p id="pageSubtitle">Seguimiento automático de certificaciones y fechas de renovación del equipo.</p>
             </div>
 
             <button id="logoutBtn" class="logout-btn">Cerrar sesión</button>
         </header>
 
-        <section id="resumen" class="resumen"></section>
+        <nav class="module-tabs">
+            <button class="module-tab active" data-module="certificaciones">Certificaciones</button>
+            <button class="module-tab" data-module="produccion">Producción</button>
+        </nav>
 
-        <section class="buscador">
-            <input type="text" id="busqueda" placeholder="Buscar por persona, CP o descripción...">
+        <section id="certificacionesModule" class="module-section active">
+            <section id="resumen" class="resumen"></section>
+
+            <section class="buscador">
+                <input type="text" id="busqueda" placeholder="Buscar por persona, CP o descripción...">
+            </section>
+
+            <section id="personas" class="personas">
+                <p>Cargando datos...</p>
+            </section>
         </section>
 
-        <section id="personas" class="personas">
-            <p>Cargando datos...</p>
+        <section id="produccionModule" class="module-section">
+            <section class="production-hero">
+                <div>
+                    <h2>Producción</h2>
+                    <p>Estado general de Production Orders PSI, próximas acciones y riesgos operativos.</p>
+                </div>
+            </section>
+
+            <section class="production-cards">
+                <article class="production-card">
+                    <span>OT abiertas</span>
+                    <strong>18</strong>
+                </article>
+
+                <article class="production-card">
+                    <span>Atención hoy</span>
+                    <strong>7</strong>
+                </article>
+
+                <article class="production-card">
+                    <span>En riesgo</span>
+                    <strong>4</strong>
+                </article>
+
+                <article class="production-card">
+                    <span>Listas para ensamblar</span>
+                    <strong>3</strong>
+                </article>
+            </section>
+
+            <section class="work-agenda">
+                <div class="section-title">
+                    <h3>🔥 Agenda de hoy</h3>
+                    <p>Actividades sugeridas por el Asistente de Producción.</p>
+                </div>
+
+                <div class="agenda-list">
+                    <article class="agenda-item critical">
+                        <div>
+                            <strong>Fabricar soportes</strong>
+                            <span>OT 12045 · ENAP · PSI-26-0107</span>
+                        </div>
+                        <small>Juan Carlos</small>
+                    </article>
+
+                    <article class="agenda-item high">
+                        <div>
+                            <strong>Generar picking</strong>
+                            <span>OT 12038 · Codelco · PSI-25-0196</span>
+                        </div>
+                        <small>Julio / Hernán</small>
+                    </article>
+
+                    <article class="agenda-item medium">
+                        <div>
+                            <strong>Iniciar ensamblaje</strong>
+                            <span>OT 12031 · SQM · PSI-26-0025</span>
+                        </div>
+                        <small>David</small>
+                    </article>
+                </div>
+            </section>
+
+            <section class="production-table-section">
+                <div class="section-title">
+                    <h3>Production Orders abiertas</h3>
+                    <p>Vista principal del Asistente de Producción PSI.</p>
+                </div>
+
+                <div class="production-table-wrapper">
+                    <table class="production-table">
+                        <thead>
+                            <tr>
+                                <th>Atención</th>
+                                <th>OT</th>
+                                <th>Cliente</th>
+                                <th>Proyecto</th>
+                                <th>Due Date</th>
+                                <th>Estado</th>
+                                <th>Bloqueador</th>
+                                <th>Próxima acción</th>
+                                <th>Responsable</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td><span class="badge danger">Crítica</span></td>
+                                <td>12045</td>
+                                <td>ENAP</td>
+                                <td>PSI-26-0107</td>
+                                <td>18/07/2026</td>
+                                <td>Esperando soportes</td>
+                                <td>Soportes pendientes</td>
+                                <td>Mandar a fabricar soportes</td>
+                                <td>Juan Carlos</td>
+                            </tr>
+                            <tr>
+                                <td><span class="badge warning">Alta</span></td>
+                                <td>12038</td>
+                                <td>Codelco</td>
+                                <td>PSI-25-0196</td>
+                                <td>22/07/2026</td>
+                                <td>Lista para picking</td>
+                                <td>Picking pendiente</td>
+                                <td>Generar picking</td>
+                                <td>Julio / Hernán</td>
+                            </tr>
+                            <tr>
+                                <td><span class="badge success">Normal</span></td>
+                                <td>12031</td>
+                                <td>SQM</td>
+                                <td>PSI-26-0025</td>
+                                <td>05/08/2026</td>
+                                <td>Lista para ensamblar</td>
+                                <td>Sin bloqueador</td>
+                                <td>Iniciar ensamblaje</td>
+                                <td>David</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </section>
         </section>
 
     </main>
