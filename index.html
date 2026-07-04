@@ -55,22 +55,22 @@
             <section class="production-cards">
                 <article class="production-card">
                     <span>OT abiertas</span>
-                    <strong>18</strong>
+                    <strong id="totalOT">0</strong>
                 </article>
 
                 <article class="production-card">
                     <span>Atención hoy</span>
-                    <strong>7</strong>
+                    <strong id="accionesHoy">0</strong>
                 </article>
 
                 <article class="production-card">
                     <span>En riesgo</span>
-                    <strong>4</strong>
+                    <strong id="otRiesgo">0</strong>
                 </article>
 
                 <article class="production-card">
                     <span>Listas para ensamblar</span>
-                    <strong>3</strong>
+                    <strong id="otListas">0</strong>
                 </article>
             </section>
 
@@ -80,7 +80,7 @@
                     <p>Actividades sugeridas por el Asistente de Producción.</p>
                 </div>
 
-                <div class="agenda-list">
+                <div class="agenda-list" id="agendaList"></div>
                     <article class="agenda-item critical">
                         <div>
                             <strong>Fabricar soportes</strong>
@@ -128,7 +128,7 @@
                                 <th>Responsable</th>
                             </tr>
                         </thead>
-                        <tbody>
+                        <tbody id="productionTableBody"></tbody>
                             <tr>
                                 <td><span class="badge danger">Crítica</span></td>
                                 <td>12045</td>
@@ -172,6 +172,7 @@
 
     <script type="module" src="auth.js"></script>
     <script src="script.js"></script>
+    <script src="production.js"></script>
 
 </body>
 
