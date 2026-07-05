@@ -36,6 +36,10 @@ function importarProductionOrders(rows) {
                 customer: row.c[8]?.v || "",
                 customSolution: row.c[9]?.v || "",
                 description: row.c[10]?.v || "",
+                tasks: [],
+                checklist: {},
+                risk: "Normal",
+                progress: 0,
                 components: []
             };
         }
@@ -69,77 +73,21 @@ function importarProductionOrders(rows) {
             component.componentStatus.toLowerCase().includes("taller")
         ).length;
 
-        let estado = "En revisión";
-        let bloqueador = "Revisión pendiente";
-        let accion = "Revisar OT";
-        let responsable = "Adrián";
-
-        if (missingComponents > 0) {
-            estado = "Esperando materiales";
-            bloqueador = "Componentes sin stock";
-            accion = "Revisar componentes faltantes";
-            responsable = "Compras / CS";
-        } else if (pickingPending > 0) {
-            estado = "Lista para picking";
-            bloqueador = "Picking pendiente";
-            accion = "Generar picking";
-            responsable = "Julio / Hernán";
-        } else if (readyInWorkshop === totalComponents) {
-            estado = "Lista para ensamblar";
-            bloqueador = "Sin bloqueador";
-            accion = "Iniciar ensamblaje";
-            responsable = "David / Juan Carlos / Santiago";
-        }
-
         const prioridad = calcularPrioridad(ot.dueDate);
+        const supportDate = calcularFechaSoportes(ot.dueDate);
 
-        return {
+        const baseOT = {
             ...ot,
             totalComponents,
             missingComponents,
             pickingPending,
             readyInWorkshop,
-            estado,
-            bloqueador,
-            accion,
-            responsable,
-            prioridad
+            prioridad,
+            supportDate
         };
+
+        return evaluarProductionOrder(baseOT);
     });
-}
-
-function calcularPrioridad(fechaTexto) {
-    const fecha = convertirFecha(fechaTexto);
-
-    if (!fecha) return "Normal";
-
-    const hoy = new Date();
-    hoy.setHours(0, 0, 0, 0);
-
-    const dias = Math.ceil((fecha - hoy) / (1000 * 60 * 60 * 24));
-
-    if (dias < 0) return "Crítica";
-    if (dias <= 3) return "Crítica";
-    if (dias <= 7) return "Alta";
-    if (dias <= 14) return "Media";
-
-    return "Normal";
-}
-
-function convertirFecha(fechaTexto) {
-    if (!fechaTexto) return null;
-
-    const partes = fechaTexto.toString().split("/");
-
-    if (partes.length !== 3) return null;
-
-    const dia = parseInt(partes[0], 10);
-    const mes = parseInt(partes[1], 10) - 1;
-    let anio = parseInt(partes[2], 10);
-
-    if (anio < 100) anio += 2000;
-
-    return new Date(anio, mes, dia);
 }
 
 function obtenerBadge(prioridad) {
@@ -168,7 +116,7 @@ function actualizarResumenProduccion(data) {
     ).length;
 
     document.getElementById("accionesHoy").textContent = data.filter(item =>
-        item.prioridad === "Crítica" || item.prioridad === "Alta"
+        item.prioridad === "Crítica" || item.prioridad === "Alta" || item.etapa === "SUPPORTS"
     ).length;
 }
 
@@ -176,7 +124,11 @@ function renderAgenda(data) {
     const agenda = document.getElementById("agendaList");
 
     const actividades = data
-        .filter(item => item.prioridad === "Crítica" || item.prioridad === "Alta")
+        .filter(item =>
+            item.prioridad === "Crítica" ||
+            item.prioridad === "Alta" ||
+            item.etapa === "SUPPORTS"
+        )
         .slice(0, 6);
 
     if (actividades.length === 0) {
@@ -193,6 +145,7 @@ function renderAgenda(data) {
             <div>
                 <strong>${item.accion}</strong>
                 <span>OT ${item.productionOrder} · ${item.customer} · ${item.customSolution}</span>
+                ${item.etapa === "SUPPORTS" ? `<span>Fecha objetivo soporte: ${item.supportDate}</span>` : ""}
             </div>
             <small>${item.responsable}</small>
         </article>
