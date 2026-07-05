@@ -854,3 +854,25 @@ body{
     }
 
 }
+
+.version-tag{
+
+    display:inline-block;
+
+    margin-left:10px;
+
+    padding:4px 10px;
+
+    border-radius:20px;
+
+    background:#003865;
+
+    color:white;
+
+    font-size:.55em;
+
+    vertical-align:middle;
+
+    font-weight:600;
+
+}
