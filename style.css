@@ -790,3 +790,67 @@ body{
         font-size:28px;
     }
 }
+
+/* ===========================
+   PSI CONTROL CENTER
+=========================== */
+
+.control-center{
+    margin-bottom:24px;
+}
+
+.control-center-grid{
+
+    display:grid;
+
+    grid-template-columns:repeat(3,1fr);
+
+    gap:16px;
+
+}
+
+.control-card{
+
+    background:#fff;
+
+    border-radius:12px;
+
+    padding:18px;
+
+    box-shadow:0 2px 8px rgba(0,0,0,.08);
+
+}
+
+.control-card h4{
+
+    margin:0 0 12px 0;
+
+    color:#003865;
+
+}
+
+.control-card ul{
+
+    margin:0;
+
+    padding-left:18px;
+
+}
+
+.control-card li{
+
+    margin-bottom:8px;
+
+    font-size:.92rem;
+
+}
+
+@media (max-width:900px){
+
+    .control-center-grid{
+
+        grid-template-columns:1fr;
+
+    }
+
+}

@@ -45,6 +45,7 @@
         </section>
 
         <section id="produccionModule" class="module-section">
+
             <section class="production-hero">
                 <div>
                     <h2>Producción</h2>
@@ -74,6 +75,15 @@
                 </article>
             </section>
 
+            <section class="control-center">
+                <div class="section-title">
+                    <h3>🧭 PSI Control Center</h3>
+                    <p>Resumen ejecutivo para gestión diaria de producción.</p>
+                </div>
+
+                <div id="controlCenterContent" class="control-center-grid"></div>
+            </section>
+
             <section class="work-agenda">
                 <div class="section-title">
                     <h3>🔥 Agenda de hoy</h3>
@@ -81,30 +91,6 @@
                 </div>
 
                 <div class="agenda-list" id="agendaList"></div>
-                    <article class="agenda-item critical">
-                        <div>
-                            <strong>Fabricar soportes</strong>
-                            <span>OT 12045 · ENAP · PSI-26-0107</span>
-                        </div>
-                        <small>Juan Carlos</small>
-                    </article>
-
-                    <article class="agenda-item high">
-                        <div>
-                            <strong>Generar picking</strong>
-                            <span>OT 12038 · Codelco · PSI-25-0196</span>
-                        </div>
-                        <small>Julio / Hernán</small>
-                    </article>
-
-                    <article class="agenda-item medium">
-                        <div>
-                            <strong>Iniciar ensamblaje</strong>
-                            <span>OT 12031 · SQM · PSI-26-0025</span>
-                        </div>
-                        <small>David</small>
-                    </article>
-                </div>
             </section>
 
             <section class="production-table-section">
@@ -121,6 +107,7 @@
                                 <th>OT</th>
                                 <th>Cliente</th>
                                 <th>Proyecto</th>
+                                <th>Etapa</th>
                                 <th>Due Date</th>
                                 <th>Estado</th>
                                 <th>Bloqueador</th>
@@ -128,52 +115,31 @@
                                 <th>Responsable</th>
                             </tr>
                         </thead>
+
                         <tbody id="productionTableBody"></tbody>
-                            <tr>
-                                <td><span class="badge danger">Crítica</span></td>
-                                <td>12045</td>
-                                <td>ENAP</td>
-                                <td>PSI-26-0107</td>
-                                <td>18/07/2026</td>
-                                <td>Esperando soportes</td>
-                                <td>Soportes pendientes</td>
-                                <td>Mandar a fabricar soportes</td>
-                                <td>Juan Carlos</td>
-                            </tr>
-                            <tr>
-                                <td><span class="badge warning">Alta</span></td>
-                                <td>12038</td>
-                                <td>Codelco</td>
-                                <td>PSI-25-0196</td>
-                                <td>22/07/2026</td>
-                                <td>Lista para picking</td>
-                                <td>Picking pendiente</td>
-                                <td>Generar picking</td>
-                                <td>Julio / Hernán</td>
-                            </tr>
-                            <tr>
-                                <td><span class="badge success">Normal</span></td>
-                                <td>12031</td>
-                                <td>SQM</td>
-                                <td>PSI-26-0025</td>
-                                <td>05/08/2026</td>
-                                <td>Lista para ensamblar</td>
-                                <td>Sin bloqueador</td>
-                                <td>Iniciar ensamblaje</td>
-                                <td>David</td>
-                            </tr>
-                        </tbody>
                     </table>
                 </div>
             </section>
+
         </section>
 
     </main>
 
     <script type="module" src="auth.js"></script>
     <script src="script.js"></script>
-    <script src="production.js"></script>
+
+    <script src="production-stages.js"></script>
+    <script src="production-workflow.js"></script>
     <script src="production-rules.js"></script>
+    <script src="production-tasks.js"></script>
+    <script src="production-alerts.js"></script>
+    <script src="production-checklists.js"></script>
+    <script src="production-kpi.js"></script>
+    <script src="production-users.js"></script>
+    <script src="production-agenda.js"></script>
+    <script src="production-engine.js"></script>
+    <script src="production-ui.js"></script>
+    <script src="production.js"></script>
 
 </body>
 

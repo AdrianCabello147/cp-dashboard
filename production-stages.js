@@ -57,7 +57,7 @@ const PRODUCTION_STAGES = {
     ASSEMBLY: {
         id: "ASSEMBLY",
         name: "Ensamblaje",
-        responsible: "David / Juan Carlos / Santiago",
+        responsible: "David",
         action: "Ensamblar",
         blocker: "",
         progress: 60
