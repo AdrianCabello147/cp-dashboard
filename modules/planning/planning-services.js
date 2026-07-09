@@ -1,5 +1,7 @@
 import {
+    addComment,
     createTask,
+    getComments,
     getAllTasks,
     updateTask
 } from "../../auth/firestore.js";
@@ -76,6 +78,56 @@ export async function updatePlanningTaskData(taskId, task) {
 
 }
 
+export async function loadPlanningTaskComments(taskId) {
+
+    console.log("[Planning][Firestore] Antes de cargar comentarios desde Firestore", taskId);
+
+    try {
+        const comments = await withPlanningFirestoreTimeout(
+            getComments(taskId),
+            "Timeout cargando comentarios de Planificación desde Firestore"
+        );
+
+        console.log("[Planning][Firestore] Después de cargar comentarios desde Firestore", taskId, comments.length);
+
+        return comments.map(normalizePlanningCommentFromFirestore);
+    } catch (error) {
+        console.error("[Planning][Firestore] Error cargando comentarios desde Firestore", taskId, error);
+        throw error;
+    }
+
+}
+
+export async function savePlanningTaskComment(taskId, text) {
+
+    const commentData = {
+        taskId,
+        text,
+        user: "Adrián"
+    };
+
+    console.log("[Planning][Firestore] Antes de crear comentario en Firestore", commentData);
+
+    try {
+        const docRef = await withPlanningFirestoreTimeout(
+            addComment(commentData),
+            "Timeout creando comentario de Planificación en Firestore"
+        );
+
+        console.log("[Planning][Firestore] Después de crear comentario en Firestore", docRef.id);
+
+        return normalizePlanningCommentFromFirestore({
+            ...commentData,
+            id: docRef.id,
+            createdAt: new Date()
+        });
+    } catch (error) {
+        console.error("[Planning][Firestore] Error creando comentario en Firestore", error);
+        throw error;
+    }
+
+}
+
 function preparePlanningTaskForFirestore(task) {
 
     const {
@@ -90,6 +142,43 @@ function preparePlanningTaskForFirestore(task) {
         ...taskData,
         module: "planning"
     };
+
+}
+
+function normalizePlanningCommentFromFirestore(comment) {
+
+    return {
+        id: comment.id || "",
+        taskId: comment.taskId || "",
+        text: comment.text || "",
+        user: comment.user || "Adrián",
+        createdAt: comment.createdAt || null,
+        date: formatPlanningCommentDate(comment.createdAt)
+    };
+
+}
+
+function formatPlanningCommentDate(createdAt) {
+
+    if (!createdAt) {
+        return new Date().toLocaleString("es-CL", {
+            dateStyle: "short",
+            timeStyle: "short"
+        });
+    }
+
+    const date = typeof createdAt.toDate === "function"
+        ? createdAt.toDate()
+        : new Date(createdAt);
+
+    if (Number.isNaN(date.getTime())) {
+        return "";
+    }
+
+    return date.toLocaleString("es-CL", {
+        dateStyle: "short",
+        timeStyle: "short"
+    });
 
 }
 
@@ -115,3 +204,5 @@ function withPlanningFirestoreTimeout(operation, message) {
 window.loadPlanningTasks = loadPlanningTasks;
 window.savePlanningTask = savePlanningTask;
 window.updatePlanningTaskData = updatePlanningTaskData;
+window.loadPlanningTaskComments = loadPlanningTaskComments;
+window.savePlanningTaskComment = savePlanningTaskComment;

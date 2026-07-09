@@ -995,14 +995,15 @@ async function handlePlanningExecutionAction(taskId, action, event) {
   await executePlanningTaskAction(taskId, action);
 }
 
-function openPlanningComments(taskId, event) {
+async function openPlanningComments(taskId, event) {
   if (event) {
     event.stopPropagation();
   }
 
-  const task = getPlanningTasks().find(item => item.id === taskId);
   const modal = document.getElementById("planningCommentsModal");
   const form = document.getElementById("commentsForm");
+
+  let task = getPlanningTasks().find(item => item.id === taskId);
 
   if (!task || !modal || !form) return;
 
@@ -1010,6 +1011,29 @@ function openPlanningComments(taskId, event) {
   form.elements.commentText.value = "";
   renderPlanningCommentsList(task);
   modal.hidden = false;
+
+  try {
+    task = await loadPlanningCommentsForTask(taskId);
+
+    if (task) {
+      refreshPlanningBoard();
+
+      const updatedModal = document.getElementById("planningCommentsModal");
+      const updatedForm = document.getElementById("commentsForm");
+
+      if (updatedForm) {
+        updatedForm.elements.taskId.value = taskId;
+      }
+
+      renderPlanningCommentsList(task);
+
+      if (updatedModal) {
+        updatedModal.hidden = false;
+      }
+    }
+  } catch (error) {
+    console.error("No se pudieron cargar los comentarios de Planificación.", error);
+  }
 }
 
 function closePlanningComments() {
@@ -1025,7 +1049,7 @@ function closePlanningComments() {
   }
 }
 
-function handlePlanningCommentSubmit(event) {
+async function handlePlanningCommentSubmit(event) {
   event.preventDefault();
 
   const form = event.target;
@@ -1034,9 +1058,14 @@ function handlePlanningCommentSubmit(event) {
 
   if (!taskId || !text) return;
 
-  addPlanningTaskCommentLocal(taskId, text);
+  let updatedTask = null;
 
-  const updatedTask = getPlanningTasks().find(item => item.id === taskId);
+  try {
+    updatedTask = await addPlanningTaskCommentPersisted(taskId, text);
+  } catch (error) {
+    console.error("No se pudo guardar el comentario de Planificación.", error);
+    return;
+  }
 
   if (updatedTask) {
     renderPlanningCommentsList(updatedTask);

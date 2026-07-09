@@ -16,6 +16,7 @@ function refreshPlanningBoard() {
 async function loadPlanningTasksFromDataSource() {
     const tasks = await loadPlanningTasks();
     setPlanningTasks(tasks);
+    await loadPlanningCommentsForTasks(tasks);
 }
 
 async function createPlanningTask(task) {
@@ -52,6 +53,26 @@ async function executePlanningTaskAction(taskId, action) {
 function addPlanningTaskCommentLocal(taskId, text) {
     addPlanningTaskComment(taskId, text);
     refreshPlanningBoard();
+}
+
+async function loadPlanningCommentsForTasks(tasks) {
+    await Promise.all((tasks || []).map(async task => {
+        const comments = await loadPlanningTaskComments(task.id);
+        setPlanningTaskComments(task.id, comments);
+    }));
+}
+
+async function loadPlanningCommentsForTask(taskId) {
+    const comments = await loadPlanningTaskComments(taskId);
+    return setPlanningTaskComments(taskId, comments);
+}
+
+async function addPlanningTaskCommentPersisted(taskId, text) {
+    const comment = await savePlanningTaskComment(taskId, text);
+    const updatedTask = addPlanningTaskComment(taskId, comment);
+    refreshPlanningBoard();
+
+    return updatedTask;
 }
 
 document.addEventListener("DOMContentLoaded", initPlanning);

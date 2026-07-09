@@ -145,6 +145,21 @@ function setPlanningTasks(tasks) {
   return PLANNING_TASKS;
 }
 
+function setPlanningTaskComments(taskId, comments) {
+  PLANNING_TASKS = PLANNING_TASKS.map(existingTask => {
+    if (existingTask.id !== taskId) {
+      return existingTask;
+    }
+
+    return {
+      ...existingTask,
+      comentariosLocales: comments || []
+    };
+  });
+
+  return PLANNING_TASKS.find(existingTask => existingTask.id === taskId) || null;
+}
+
 function getProductionOrders() {
   return PLANNING_PRODUCTION_ORDERS;
 }
@@ -338,32 +353,42 @@ function executePlanningTask(taskId, action) {
   return updatedTask;
 }
 
-function addPlanningTaskComment(taskId, text) {
+function addPlanningTaskComment(taskId, comment) {
   const timestamp = getCurrentPlanningTimestamp();
+  const commentData = typeof comment === "string"
+    ? {
+        text: comment,
+        date: timestamp,
+        user: "Adrián"
+      }
+    : {
+        ...comment,
+        date: comment.date || timestamp,
+        user: comment.user || "Adrián"
+      };
+  let updatedTask = null;
 
   PLANNING_TASKS = PLANNING_TASKS.map(existingTask => {
     if (existingTask.id !== taskId) {
       return existingTask;
     }
 
-    return {
+    updatedTask = {
       ...existingTask,
       comentariosLocales: [
         ...(existingTask.comentariosLocales || []),
-        {
-          text,
-          date: timestamp,
-          user: "Adrián"
-        }
+        commentData
       ],
       timelineLocal: [
         ...(existingTask.timelineLocal || []),
         createPlanningTimelineEvent("comment", "Comentario agregado", timestamp)
       ]
     };
+
+    return updatedTask;
   });
 
-  return PLANNING_TASKS;
+  return updatedTask;
 }
 
 function getCurrentPlanningTimestamp() {
