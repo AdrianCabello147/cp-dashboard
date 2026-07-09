@@ -53,6 +53,45 @@ async function executePlanningTaskAction(taskId, action) {
     refreshPlanningBoard();
 }
 
+async function duplicatePlanningTaskAction(taskId) {
+    const sourceTask = getPlanningTasks().find(task => task.id === taskId);
+
+    if (!sourceTask) return;
+
+    try {
+        const duplicatedTask = buildDuplicatedPlanningTask(sourceTask);
+        const savedTask = await savePlanningTask(duplicatedTask);
+        const localTask = addDuplicatedPlanningTask(savedTask, sourceTask);
+
+        await persistLatestPlanningTimelineEvent(localTask);
+        refreshPlanningBoard();
+    } catch (error) {
+        console.error("No se pudo duplicar la tarea de Planificación.", error);
+    }
+}
+
+async function deletePlanningTaskAction(taskId) {
+    const task = getPlanningTasks().find(item => item.id === taskId);
+
+    if (!task) return;
+
+    try {
+        const deletedTask = {
+            ...task,
+            deleted: true,
+            deletedAt: new Date().toISOString(),
+            deletedBy: "Adrián"
+        };
+
+        await updatePlanningTaskData(taskId, deletedTask);
+        await persistPlanningTimelineEvent(taskId, createPlanningTimelineEvent("delete", "Tarea eliminada"));
+        removePlanningTaskFromBoard(taskId);
+        refreshPlanningBoard();
+    } catch (error) {
+        console.error("No se pudo eliminar la tarea de Planificación.", error);
+    }
+}
+
 function addPlanningTaskCommentLocal(taskId, text) {
     addPlanningTaskComment(taskId, text);
     refreshPlanningBoard();
@@ -99,8 +138,14 @@ async function persistLatestPlanningTimelineEvent(task) {
 
     if (!task?.id || !latestEvent) return;
 
+    await persistPlanningTimelineEvent(task.id, latestEvent);
+}
+
+async function persistPlanningTimelineEvent(taskId, event) {
+    if (!taskId || !event) return;
+
     try {
-        await savePlanningTimelineEvent(task.id, latestEvent);
+        await savePlanningTimelineEvent(taskId, event);
     } catch (error) {
         console.warn("No se pudo guardar el evento de timeline de Planificación en Firestore.", error);
     }

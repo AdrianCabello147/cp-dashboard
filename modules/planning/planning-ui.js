@@ -498,6 +498,12 @@ function renderPlanningCard(task) {
         <button type="button" class="task-action-btn" onclick="openPlanningTimeline('${task.id}', event)">
           Timeline
         </button>
+        <button type="button" class="task-action-btn" onclick="handlePlanningDuplicateTask('${task.id}', event)">
+          Duplicar
+        </button>
+        <button type="button" class="task-action-btn" onclick="handlePlanningDeleteTask('${task.id}', event)">
+          Eliminar
+        </button>
       </div>
 
       <div class="task-execution-actions">
@@ -995,6 +1001,26 @@ async function handlePlanningExecutionAction(taskId, action, event) {
   await executePlanningTaskAction(taskId, action);
 }
 
+async function handlePlanningDuplicateTask(taskId, event) {
+  if (event) {
+    event.stopPropagation();
+  }
+
+  await duplicatePlanningTaskAction(taskId);
+}
+
+async function handlePlanningDeleteTask(taskId, event) {
+  if (event) {
+    event.stopPropagation();
+  }
+
+  const shouldDelete = confirm("¿Eliminar esta tarea?");
+
+  if (!shouldDelete) return;
+
+  await deletePlanningTaskAction(taskId);
+}
+
 async function openPlanningComments(taskId, event) {
   if (event) {
     event.stopPropagation();
@@ -1194,7 +1220,9 @@ function getPlanningTimelineTypeLabel(type) {
     pause: "Pausa",
     resume: "Reanudación",
     finish: "Término",
-    comment: "Comentario"
+    comment: "Comentario",
+    duplicate: "Duplicada",
+    delete: "Eliminación"
   };
 
   return labels[type] || type || "Evento";

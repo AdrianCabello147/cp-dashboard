@@ -22,7 +22,7 @@ export async function loadPlanningTasks() {
 
         console.log("[Planning][Firestore] Después de cargar tareas desde Firestore", tasks.length);
 
-        return tasks.filter(task => task.module === "planning");
+        return tasks.filter(task => task.module === "planning" && !task.deleted);
     } catch (error) {
         console.error("[Planning][Firestore] Error cargando tareas desde Firestore", error);
         throw error;

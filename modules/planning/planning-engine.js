@@ -269,6 +269,54 @@ function addPlanningTask(task) {
   return PLANNING_TASKS.find(existingTask => existingTask.id === taskId);
 }
 
+function addDuplicatedPlanningTask(task, sourceTask) {
+  const taskId = task.id || `TASK-${Date.now()}`;
+  const sourceLabel = sourceTask?.actividad || sourceTask?.otPsi || sourceTask?.id || "tarea original";
+
+  PLANNING_TASKS.push({
+    id: taskId,
+    semana: "Semana actual",
+    ...task,
+    timelineLocal: [
+      createPlanningTimelineEvent("duplicate", `Tarea duplicada desde ${sourceLabel}`)
+    ]
+  });
+
+  return PLANNING_TASKS.find(existingTask => existingTask.id === taskId);
+}
+
+function removePlanningTaskFromBoard(taskId) {
+  PLANNING_TASKS = PLANNING_TASKS.filter(existingTask => existingTask.id !== taskId);
+
+  return PLANNING_TASKS;
+}
+
+function buildDuplicatedPlanningTask(sourceTask) {
+  return {
+    semana: sourceTask.semana || "Semana actual",
+    actividad: sourceTask.actividad || "",
+    otPsi: sourceTask.otPsi || "",
+    cliente: sourceTask.cliente || "",
+    proyecto: sourceTask.proyecto || "",
+    responsableTaller: sourceTask.responsableTaller || "",
+    tipo: sourceTask.tipo || "",
+    estado: "Pendiente",
+    prioridad: sourceTask.prioridad || "Normal",
+    complejidad: sourceTask.complejidad || "Media",
+    fechaInicioPlanificada: sourceTask.fechaInicioPlanificada || "",
+    fechaObjetivo: sourceTask.fechaObjetivo || "",
+    comentario: sourceTask.comentario || "",
+    comentariosLocales: [],
+    timelineLocal: [],
+    executionLog: [],
+    inicioReal: "",
+    pausas: [],
+    reanudaciones: [],
+    fechaTerminoReal: "",
+    deleted: false
+  };
+}
+
 function updatePlanningTask(taskId, task) {
   let updatedTask = null;
 
