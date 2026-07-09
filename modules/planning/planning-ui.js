@@ -1124,13 +1124,13 @@ function getPlanningCommentsCount(task) {
   return (task.comentariosLocales || []).length;
 }
 
-function openPlanningTimeline(taskId, event) {
+async function openPlanningTimeline(taskId, event) {
   if (event) {
     event.stopPropagation();
   }
 
-  const task = getPlanningTasks().find(item => item.id === taskId);
   const modal = document.getElementById("planningTimelineModal");
+  const task = await loadPlanningTimelineForTask(taskId);
 
   if (!task || !modal) return;
 

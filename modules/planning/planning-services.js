@@ -1,8 +1,10 @@
 import {
     addComment,
+    addTimelineEvent,
     createTask,
     getComments,
     getAllTasks,
+    getTimeline,
     updateTask
 } from "../../auth/firestore.js";
 
@@ -128,6 +130,60 @@ export async function savePlanningTaskComment(taskId, text) {
 
 }
 
+export async function savePlanningTimelineEvent(taskId, event) {
+
+    const eventData = {
+        module: "planning",
+        code: taskId,
+        action: event.type,
+        comment: event.description,
+        createdAt: event.date,
+        user: event.user || "Sistema"
+    };
+
+    console.log("[Planning][Firestore] Antes de crear evento timeline en Firestore", eventData);
+
+    try {
+        const docRef = await withPlanningFirestoreTimeout(
+            addTimelineEvent(eventData),
+            "Timeout creando evento timeline de Planificación en Firestore"
+        );
+
+        console.log("[Planning][Firestore] Después de crear evento timeline en Firestore", docRef.id);
+
+        return {
+            ...event,
+            id: docRef.id
+        };
+    } catch (error) {
+        console.error("[Planning][Firestore] Error creando evento timeline en Firestore", error);
+        throw error;
+    }
+
+}
+
+export async function loadPlanningTimeline(taskId) {
+
+    console.log("[Planning][Firestore] Antes de cargar timeline desde Firestore", taskId);
+
+    try {
+        const events = await withPlanningFirestoreTimeout(
+            getTimeline(taskId),
+            "Timeout cargando timeline de Planificación desde Firestore"
+        );
+
+        console.log("[Planning][Firestore] Después de cargar timeline desde Firestore", taskId, events.length);
+
+        return events
+            .map(normalizePlanningTimelineEventFromFirestore)
+            .sort(comparePlanningTimelineEventsByDate);
+    } catch (error) {
+        console.error("[Planning][Firestore] Error cargando timeline desde Firestore", taskId, error);
+        throw error;
+    }
+
+}
+
 function preparePlanningTaskForFirestore(task) {
 
     const {
@@ -182,6 +238,86 @@ function formatPlanningCommentDate(createdAt) {
 
 }
 
+function normalizePlanningTimelineEventFromFirestore(event) {
+
+    return {
+        type: event.action || "",
+        description: event.comment || "",
+        date: formatPlanningCommentDate(event.createdAt),
+        createdAt: event.createdAt || null,
+        user: event.user || "Sistema"
+    };
+
+}
+
+function comparePlanningTimelineEventsByDate(firstEvent, secondEvent) {
+
+    return getPlanningTimelineEventTime(firstEvent) - getPlanningTimelineEventTime(secondEvent);
+
+}
+
+function getPlanningTimelineEventTime(event) {
+
+    const value = event?.createdAt || event?.date;
+
+    if (!value) return 0;
+
+    if (typeof value.toDate === "function") {
+        return value.toDate().getTime();
+    }
+
+    if (value instanceof Date) {
+        return value.getTime();
+    }
+
+    if (typeof value === "number") {
+        return value;
+    }
+
+    if (typeof value === "string") {
+        const isoDate = new Date(value);
+
+        if (!Number.isNaN(isoDate.getTime())) {
+            return isoDate.getTime();
+        }
+
+        const localDate = parsePlanningTimelineLocalDate(value);
+
+        if (localDate) {
+            return localDate.getTime();
+        }
+    }
+
+    return 0;
+
+}
+
+function parsePlanningTimelineLocalDate(value) {
+
+    const match = value.match(/^(\d{1,2})[-/](\d{1,2})[-/](\d{2,4}),?\s+(\d{1,2}):(\d{2})/);
+
+    if (!match) return null;
+
+    const day = Number(match[1]);
+    const month = Number(match[2]);
+    let year = Number(match[3]);
+    const hour = Number(match[4]);
+    const minute = Number(match[5]);
+
+    if (year < 100) {
+        year += 2000;
+    }
+
+    const date = new Date(year, month - 1, day, hour, minute);
+
+    if (Number.isNaN(date.getTime())) {
+        return null;
+    }
+
+    return date;
+
+}
+
 function withPlanningFirestoreTimeout(operation, message) {
 
     let timeoutId;
@@ -206,3 +342,5 @@ window.savePlanningTask = savePlanningTask;
 window.updatePlanningTaskData = updatePlanningTaskData;
 window.loadPlanningTaskComments = loadPlanningTaskComments;
 window.savePlanningTaskComment = savePlanningTaskComment;
+window.savePlanningTimelineEvent = savePlanningTimelineEvent;
+window.loadPlanningTimeline = loadPlanningTimeline;

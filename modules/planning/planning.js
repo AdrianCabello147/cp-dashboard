@@ -26,7 +26,8 @@ async function createPlanningTask(task) {
 
     console.log("[Planning] Después de llamar a Firestore para crear tarea", savedTask);
 
-    addPlanningTask(savedTask);
+    const localTask = addPlanningTask(savedTask);
+    await persistLatestPlanningTimelineEvent(localTask);
     refreshPlanningBoard();
 }
 
@@ -35,6 +36,7 @@ async function savePlanningTaskChanges(taskId, task) {
 
     if (updatedTask) {
         await updatePlanningTaskData(taskId, updatedTask);
+        await persistLatestPlanningTimelineEvent(updatedTask);
     }
 
     refreshPlanningBoard();
@@ -45,6 +47,7 @@ async function executePlanningTaskAction(taskId, action) {
 
     if (updatedTask) {
         await updatePlanningTaskData(taskId, updatedTask);
+        await persistLatestPlanningTimelineEvent(updatedTask);
     }
 
     refreshPlanningBoard();
@@ -70,9 +73,37 @@ async function loadPlanningCommentsForTask(taskId) {
 async function addPlanningTaskCommentPersisted(taskId, text) {
     const comment = await savePlanningTaskComment(taskId, text);
     const updatedTask = addPlanningTaskComment(taskId, comment);
+    await persistLatestPlanningTimelineEvent(updatedTask);
     refreshPlanningBoard();
 
     return updatedTask;
+}
+
+async function loadPlanningTimelineForTask(taskId) {
+    const task = getPlanningTasks().find(item => item.id === taskId);
+
+    if (!task) return null;
+
+    try {
+        task.timelineLocal = await loadPlanningTimeline(taskId);
+    } catch (error) {
+        console.warn("No se pudo cargar el timeline de Planificación desde Firestore.", error);
+    }
+
+    return task;
+}
+
+async function persistLatestPlanningTimelineEvent(task) {
+    const events = task?.timelineLocal || [];
+    const latestEvent = events[events.length - 1];
+
+    if (!task?.id || !latestEvent) return;
+
+    try {
+        await savePlanningTimelineEvent(task.id, latestEvent);
+    } catch (error) {
+        console.warn("No se pudo guardar el evento de timeline de Planificación en Firestore.", error);
+    }
 }
 
 document.addEventListener("DOMContentLoaded", initPlanning);
