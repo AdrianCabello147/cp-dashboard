@@ -8,7 +8,13 @@ const PLANNING_FILTERS = {
 
 const PLANNING_COLLAPSE_STATE = {
   weekly: {},
-  board: {}
+  board: {},
+  completed: {}
+};
+
+const PLANNING_COMPLETED_SUMMARY_STATE = {
+  collapsed: true,
+  selectedWeek: ""
 };
 
 function renderPlanningModule(tasks) {
@@ -16,11 +22,14 @@ function renderPlanningModule(tasks) {
 
   if (!container) return;
 
-  const filteredTasks = filterPlanningTasks(tasks, PLANNING_FILTERS);
+  const operationalTasks = tasks.filter(task => !isPlanningTaskFinished(task));
+  const completedTasks = tasks.filter(task => isPlanningTaskFinished(task));
+  const filteredTasks = filterPlanningTasks(operationalTasks, PLANNING_FILTERS);
   const groupedTasks = groupPlanningTasksByUser(filteredTasks);
   const kpis = calculatePlanningKPIs(tasks);
-  const weeklyTasks = getPlanningTasksForCurrentISOWeek(tasks);
+  const weeklyTasks = getPlanningTasksForCurrentISOWeek(operationalTasks);
   const currentISOWeek = getCurrentPlanningISOWeek();
+  ensurePlanningCompletedSummaryWeek(completedTasks);
 
   container.innerHTML = `
     <section class="planning-hero">
@@ -29,9 +38,10 @@ function renderPlanningModule(tasks) {
         <p>Planificación semanal de actividades PSI organizada por responsable.</p>
       </div>
 
-      <button class="primary-btn" type="button" onclick="openNewTaskModal()">
-        + Nueva tarea
-      </button>
+      <div class="planning-hero-actions">
+        ${renderPlanningExportExcelAction()}
+        ${renderPlanningCreateTaskAction()}
+      </div>
     </section>
 
     ${renderPlanningKPIs(kpis)}
@@ -40,7 +50,7 @@ function renderPlanningModule(tasks) {
 
     ${renderPlanningFilters()}
 
-    ${renderPlanningFilterSummary(tasks.length, filteredTasks.length)}
+    ${renderPlanningFilterSummary(operationalTasks.length, filteredTasks.length)}
 
     ${filteredTasks.length > 0 ? renderPlanningAccordionControls("board", Object.keys(groupedTasks)) : ""}
 
@@ -48,10 +58,42 @@ function renderPlanningModule(tasks) {
       ${Object.keys(groupedTasks).map(user => renderPlanningColumn(user, groupedTasks[user])).join("")}
     </section>
 
+    ${renderPlanningCompletedSummary(completedTasks)}
+
     ${renderNewTaskModal()}
     ${renderPlanningCommentsModal()}
     ${renderPlanningTimelineModal()}
   `;
+}
+
+function renderPlanningExportExcelAction() {
+  if (!canCurrentUserModifyPlanningTasks()) {
+    return "";
+  }
+
+  return `
+        <button class="secondary-btn" type="button" onclick="exportPlanningToExcel()">
+          Exportar Excel
+        </button>
+  `;
+}
+
+function renderPlanningCreateTaskAction() {
+  return `
+        <button class="primary-btn" type="button" onclick="openNewTaskModal()">
+          + Nueva tarea
+        </button>
+  `;
+}
+
+function renderPlanningDeviationReasonMeta(task) {
+  const reason = (task.motivo || "").trim();
+
+  if (!reason || reason === "Sin desviación") {
+    return "";
+  }
+
+  return `<span>Motivo desviación: ${escapePlanningHtml(reason)}</span>`;
 }
 
 function renderPlanningWeeklySection(tasks, isoWeek) {
@@ -166,6 +208,119 @@ function renderPlanningWeeklyTask(task) {
       <p>${escapePlanningHtml(task.cliente || "Sin cliente")} / ${escapePlanningHtml(task.proyecto || "Sin proyecto")}</p>
       <span class="task-status ${statusClass}">${getPlanningStatusLabel(task.estado)}</span>
       <span>${escapePlanningHtml(task.fechaObjetivo || "Sin fecha")}</span>
+    </article>
+  `;
+}
+
+function renderPlanningCompletedSummary(tasks) {
+  const weekOptions = getPlanningCompletedWeekOptions(tasks);
+  const selectedWeek = PLANNING_COMPLETED_SUMMARY_STATE.selectedWeek || getCurrentPlanningISOWeekKey();
+  const selectedTasks = tasks.filter(task => getPlanningCompletedWeekKey(task) === selectedWeek);
+  const groupedTasks = groupPlanningTasksByUser(selectedTasks);
+  const visibleGroups = Object.entries(groupedTasks).filter(([, userTasks]) => userTasks.length > 0);
+  const isCollapsed = PLANNING_COMPLETED_SUMMARY_STATE.collapsed;
+
+  return `
+    <section class="planning-weekly planning-completed-summary ${isCollapsed ? "is-collapsed" : ""}">
+      <div class="planning-weekly-header">
+        <div>
+          <h3>
+            <button
+              type="button"
+              class="planning-completed-toggle planning-accordion-header"
+              onclick="togglePlanningCompletedSummary()"
+            >
+              <span class="planning-accordion-arrow">▼</span>
+              Resumen de tareas terminadas
+            </button>
+          </h3>
+          <p>${getPlanningWeekLabel(selectedWeek)}</p>
+        </div>
+
+        <span>${selectedTasks.length} terminadas</span>
+      </div>
+
+      <div class="planning-accordion-content">
+        <section class="planning-filters planning-completed-filters">
+          <label>
+            Semana
+            <select onchange="updatePlanningCompletedSummaryWeek(this.value)">
+              ${weekOptions.map(option => `
+                <option value="${escapePlanningAttribute(option.value)}" ${option.value === selectedWeek ? "selected" : ""}>
+                  ${escapePlanningHtml(option.label)}
+                </option>
+              `).join("")}
+            </select>
+          </label>
+        </section>
+
+        ${
+          selectedTasks.length === 0
+            ? `<div class="planning-weekly-empty">No hay tareas terminadas para esta semana.</div>`
+            : `
+              <div class="planning-weekly-groups">
+                ${visibleGroups.map(([responsible, userTasks]) =>
+                  renderPlanningCompletedGroup(responsible, userTasks)
+                ).join("")}
+              </div>
+            `
+        }
+      </div>
+    </section>
+  `;
+}
+
+function renderPlanningCompletedGroup(responsible, tasks) {
+  const isCollapsed = isPlanningSectionCollapsed("completed", responsible);
+
+  return `
+    <article class="planning-weekly-group ${isCollapsed ? "is-collapsed" : ""}">
+      <button
+        type="button"
+        class="planning-weekly-group-header planning-accordion-header"
+        onclick="togglePlanningSection('completed', '${escapePlanningAttribute(responsible)}')"
+      >
+        <div>
+          <h4>
+            <span class="planning-accordion-arrow">▼</span>
+            ${escapePlanningHtml(responsible)}
+          </h4>
+          <p>${tasks.length} tareas terminadas</p>
+        </div>
+      </button>
+
+      <div class="planning-weekly-task-list planning-accordion-content">
+        ${tasks.map(task => renderPlanningCompletedTask(task)).join("")}
+      </div>
+    </article>
+  `;
+}
+
+function renderPlanningCompletedTask(task) {
+  return `
+    <article class="planning-weekly-task weekly-task-done planning-completed-task">
+      <div>
+        <strong>${escapePlanningHtml(getPlanningTaskCode(task))}</strong>
+        <span>${escapePlanningHtml(task.actividad || "Sin actividad")}</span>
+        ${task.otPsi ? `<span>${escapePlanningHtml(task.otPsi)}</span>` : ""}
+      </div>
+
+      <div>
+        <p>${escapePlanningHtml(getPlanningTaskResponsibleName(task) || "Sin responsable")}</p>
+        <span>Objetivo: ${escapePlanningHtml(task.fechaObjetivo || "Sin fecha")}</span>
+        <span>Término real: ${escapePlanningHtml(task.fechaTerminoReal || "Sin fecha")}</span>
+        ${(task.cliente || task.proyecto) ? `<span>${escapePlanningHtml(task.cliente || "Sin cliente")} / ${escapePlanningHtml(task.proyecto || "Sin proyecto")}</span>` : ""}
+      </div>
+
+      <div class="task-secondary-actions">
+        ${renderPlanningAdminActions(task)}
+        <button type="button" class="task-action-btn" onclick="openPlanningComments('${task.id}', event)">
+          Comentarios (${getPlanningCommentsCount(task)})
+        </button>
+        <button type="button" class="task-action-btn" onclick="openPlanningTimeline('${task.id}', event)">
+          Timeline
+        </button>
+      </div>
     </article>
   `;
 }
@@ -351,6 +506,17 @@ function clearPlanningFilters() {
   refreshPlanningBoard();
 }
 
+function togglePlanningCompletedSummary() {
+  PLANNING_COMPLETED_SUMMARY_STATE.collapsed = !PLANNING_COMPLETED_SUMMARY_STATE.collapsed;
+  refreshPlanningBoard();
+}
+
+function updatePlanningCompletedSummaryWeek(weekKey) {
+  PLANNING_COMPLETED_SUMMARY_STATE.selectedWeek = weekKey;
+  PLANNING_COMPLETED_SUMMARY_STATE.collapsed = false;
+  refreshPlanningBoard();
+}
+
 function togglePlanningSection(scope, responsible) {
   const state = PLANNING_COLLAPSE_STATE[scope];
 
@@ -384,6 +550,84 @@ function setPlanningSectionsCollapsed(scope, encodedNames, collapsed) {
   });
 
   refreshPlanningBoard();
+}
+
+function ensurePlanningCompletedSummaryWeek(tasks) {
+  const currentWeek = getCurrentPlanningISOWeekKey();
+  const options = getPlanningCompletedWeekOptions(tasks);
+  const hasSelectedWeek = options.some(option => option.value === PLANNING_COMPLETED_SUMMARY_STATE.selectedWeek);
+
+  if (!PLANNING_COMPLETED_SUMMARY_STATE.selectedWeek || !hasSelectedWeek) {
+    PLANNING_COMPLETED_SUMMARY_STATE.selectedWeek = currentWeek;
+  }
+}
+
+function getPlanningCompletedWeekOptions(tasks) {
+  const weeks = new Map();
+  const currentWeek = getCurrentPlanningISOWeekKey();
+
+  weeks.set(currentWeek, getPlanningWeekLabel(currentWeek));
+
+  tasks.forEach(task => {
+    const weekKey = getPlanningCompletedWeekKey(task);
+
+    if (weekKey) {
+      weeks.set(weekKey, getPlanningWeekLabel(weekKey));
+    }
+  });
+
+  return Array.from(weeks.entries())
+    .map(([value, label]) => ({ value, label }))
+    .sort((firstOption, secondOption) => secondOption.value.localeCompare(firstOption.value));
+}
+
+function getPlanningCompletedWeekKey(task) {
+  const date = parsePlanningHistoryDate(task.fechaTerminoReal) || parsePlanningHistoryDate(task.fechaObjetivo);
+
+  if (!date) return "";
+
+  return `${getISOWeekYear(date)}-${String(getISOWeekNumber(date)).padStart(2, "0")}`;
+}
+
+function getCurrentPlanningISOWeekKey() {
+  const now = new Date();
+
+  return `${getISOWeekYear(now)}-${String(getISOWeekNumber(now)).padStart(2, "0")}`;
+}
+
+function getPlanningWeekLabel(weekKey) {
+  const [year, week] = (weekKey || getCurrentPlanningISOWeekKey()).split("-");
+
+  return `Semana ${Number(week)} / ${year}`;
+}
+
+function parsePlanningHistoryDate(value) {
+  if (!value) return null;
+
+  const text = value.toString().trim().split(",")[0].trim();
+  const isoDate = parsePlanningDate(text);
+
+  if (isoDate) {
+    return isoDate;
+  }
+
+  const dashParts = text.split("-");
+
+  if (dashParts.length === 3) {
+    const [day, month, year] = dashParts.map(Number);
+
+    if (day && month && year) {
+      return new Date(year < 100 ? year + 2000 : year, month - 1, day);
+    }
+  }
+
+  return null;
+}
+
+function isPlanningTaskFinished(task) {
+  const status = normalizePlanningStatus(task?.estado);
+
+  return status === "terminado" || status === "terminada";
 }
 
 function renderPlanningKPIs(kpis) {
@@ -470,6 +714,7 @@ function renderPlanningCard(task) {
       <div class="task-card-header">
         <div class="task-title-block">
           <strong>${task.actividad}</strong>
+          <span>${escapePlanningHtml(getPlanningTaskCode(task))}</span>
           ${task.otPsi ? `<span>${task.otPsi}</span>` : ""}
         </div>
 
@@ -483,8 +728,8 @@ function renderPlanningCard(task) {
       <div class="task-meta">
         <span>${task.tipo || "Sin tipo"}</span>
         <span>Objetivo: ${task.fechaObjetivo || "Sin fecha"}</span>
+        ${renderPlanningDeviationReasonMeta(task)}
         <span>Prioridad: ${task.prioridad || "Normal"}</span>
-        <span>Complejidad: ${task.complejidad || "Sin definir"}</span>
         ${renderPlanningExecutionMeta(task)}
       </div>
 
@@ -619,8 +864,15 @@ function renderNewTaskModal() {
 
         <form id="newTaskForm" class="task-form" onsubmit="handleNewTaskSubmit(event)">
           <input name="taskId" type="hidden">
+          <input name="psiCode" type="hidden">
+          <input name="productionOrder" type="hidden">
 
           <div class="form-grid">
+            <label>
+              ID Planning
+              <input name="planningCode" type="text" placeholder="Se genera al guardar" readonly>
+            </label>
+
             <label>
               Actividad
               <input name="actividad" type="text" placeholder="Ej: Ensamble, Pruebas, Documentación" required>
@@ -656,6 +908,7 @@ function renderNewTaskModal() {
             <label>
               Tipo
               <select name="tipo" onchange="handlePlanningTypeChange()">
+                <option value="" disabled selected>Seleccionar</option>
                 <option>Orden de Trabajo OT</option>
                 <option>Cotización</option>
                 <option>Ingeniería</option>
@@ -670,6 +923,7 @@ function renderNewTaskModal() {
             <label>
               Estado
               <select name="estado">
+                <option value="" disabled selected>Seleccionar</option>
                 <option>Pendiente</option>
                 <option>En proceso</option>
                 <option>Pausada</option>
@@ -682,9 +936,25 @@ function renderNewTaskModal() {
             <label>
               Prioridad
               <select name="prioridad">
+                <option value="" disabled selected>Seleccionar</option>
                 <option>Normal</option>
                 <option>Media</option>
                 <option>Alta</option>
+              </select>
+            </label>
+
+            <label>
+              Motivo desviación
+              <select name="motivo">
+                <option value="" selected>Sin desviación</option>
+                <option>PSI</option>
+                <option>Bodega</option>
+                <option>Externo</option>
+                <option>Comercial</option>
+                <option>Cliente</option>
+                <option>Materiales</option>
+                <option>Ingeniería</option>
+                <option>Administrativo</option>
               </select>
             </label>
 
@@ -701,6 +971,7 @@ function renderNewTaskModal() {
             <label>
               Complejidad
               <select name="complejidad">
+                <option value="" disabled selected>Seleccionar</option>
                 <option>Baja</option>
                 <option>Media</option>
                 <option>Alta</option>
@@ -736,12 +1007,23 @@ async function handleNewTaskSubmit(event) {
     const responsibleUser = getPlanningSelectedResponsibleUser(form);
 
     setPlanningTaskModalError("");
+
+    const validationMessage = validatePlanningTaskForm(form, formData, responsibleUser);
+
+    if (validationMessage) {
+        setPlanningTaskModalError(validationMessage);
+        return;
+    }
+
     setPlanningTaskSavingState(true);
 
     const task = {
 
         actividad: formData.get("actividad") || "",
+        planningCode: formData.get("planningCode") || "",
         otPsi: formData.get("otPsi") || "",
+        psiCode: formData.get("psiCode") || "",
+        productionOrder: formData.get("productionOrder") || "",
         cliente: formData.get("cliente") || "",
         proyecto: formData.get("proyecto") || "",
 
@@ -751,11 +1033,13 @@ async function handleNewTaskSubmit(event) {
 
         tipo: formData.get("tipo") || "",
 
-        estado: formData.get("estado") || "Pendiente",
+        estado: formData.get("estado") || "",
 
-        prioridad: formData.get("prioridad") || "Normal",
+        prioridad: formData.get("prioridad") || "",
 
-        complejidad: formData.get("complejidad") || "Media",
+        complejidad: formData.get("complejidad") || "",
+
+        motivo: formData.get("motivo") || "",
 
         fechaInicioPlanificada: formData.get("fechaInicioPlanificada") || "",
 
@@ -780,6 +1064,34 @@ async function handleNewTaskSubmit(event) {
         setPlanningTaskSavingState(false, submitLabel);
     }
 
+}
+
+function validatePlanningTaskForm(form, formData, responsibleUser) {
+  if (!formData.get("actividad")) {
+    return "Completa la actividad de la tarea.";
+  }
+
+  if (!responsibleUser.uid || !responsibleUser.name) {
+    return "Selecciona un responsable.";
+  }
+
+  if (!formData.get("tipo")) {
+    return "Selecciona un tipo de tarea.";
+  }
+
+  if (!formData.get("estado")) {
+    return "Selecciona un estado.";
+  }
+
+  if (!formData.get("prioridad")) {
+    return "Selecciona una prioridad.";
+  }
+
+  if (!formData.get("complejidad")) {
+    return "Selecciona una complejidad.";
+  }
+
+  return "";
 }
 
 function openNewTaskModal() {
@@ -862,11 +1174,14 @@ function setPlanningModalMode(mode) {
 }
 
 function renderPlanningResponsibleOptions(selectedUid = "") {
-  return getPlanningResponsibleUsers().map(user => `
+  const placeholder = `<option value="" disabled ${selectedUid ? "" : "selected"}>Seleccionar</option>`;
+  const options = getPlanningResponsibleUsers().map(user => `
     <option value="${escapePlanningAttribute(user.uid)}" ${user.uid === selectedUid ? "selected" : ""}>
       ${escapePlanningHtml(user.name)}
     </option>
   `).join("");
+
+  return placeholder + options;
 }
 
 function getPlanningSelectedResponsibleUser(form) {
@@ -882,7 +1197,7 @@ function getPlanningSelectedResponsibleUser(form) {
 
   return {
     uid: selectedUid,
-    name: selectedOption?.textContent?.trim() || ""
+    name: selectedUid ? selectedOption?.textContent?.trim() || "" : ""
   };
 }
 
@@ -914,6 +1229,9 @@ function setPlanningTaskModalError(message) {
 
 function fillPlanningTaskForm(form, task) {
   form.elements.taskId.value = task.id || "";
+  form.elements.planningCode.value = getPlanningTaskCode(task);
+  form.elements.psiCode.value = task.psiCode || task.customSolution || "";
+  form.elements.productionOrder.value = task.productionOrder || "";
   form.elements.actividad.value = task.actividad || "";
   form.elements.otPsi.value = task.otPsi || "";
   form.elements.cliente.value = task.cliente || "";
@@ -927,7 +1245,7 @@ function fillPlanningTaskForm(form, task) {
     : `<option value="${escapePlanningAttribute(task.responsibleUid || responsibleName)}" selected>${escapePlanningHtml(responsibleName)}</option>`;
 
   form.elements.responsibleUid.innerHTML = legacyResponsibleOption + renderPlanningResponsibleOptions(responsibleUser?.uid || "");
-  form.elements.responsibleUid.value = responsibleUser?.uid || getPlanningResponsibleUsers()[0]?.uid || "";
+  form.elements.responsibleUid.value = responsibleUser?.uid || "";
 
   if (legacyResponsibleOption) {
     form.elements.responsibleUid.value = task.responsibleUid || responsibleName;
@@ -935,6 +1253,7 @@ function fillPlanningTaskForm(form, task) {
   form.elements.tipo.value = task.tipo || "Orden de Trabajo OT";
   form.elements.estado.value = task.estado || "Pendiente";
   form.elements.prioridad.value = task.prioridad || "Normal";
+  form.elements.motivo.value = task.motivo && task.motivo !== "Sin desviación" ? task.motivo : "";
   form.elements.fechaInicioPlanificada.value = toDateInputValue(task.fechaInicioPlanificada);
   form.elements.fechaObjetivo.value = toDateInputValue(task.fechaObjetivo);
   form.elements.complejidad.value = task.complejidad || "Media";
@@ -998,6 +1317,8 @@ function handlePlanningOTSearch() {
 
   form.elements.cliente.value = productionOrder.cliente || "";
   form.elements.proyecto.value = productionOrder.proyecto || "";
+  form.elements.psiCode.value = productionOrder.customSolution || "";
+  form.elements.productionOrder.value = productionOrder.productionOrder || "";
   form.elements.fechaObjetivo.value = toDateInputValue(productionOrder.dueDate);
   form.elements.complejidad.value = productionOrder.complejidad || "Media";
 

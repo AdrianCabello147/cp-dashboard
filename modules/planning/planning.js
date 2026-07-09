@@ -33,7 +33,8 @@ async function loadPlanningTasksFromDataSource() {
 async function createPlanningTask(task) {
     console.log("[Planning] Antes de llamar a Firestore para crear tarea");
 
-    const savedTask = await savePlanningTask(task);
+    const taskToSave = preparePlanningTaskForSave(task);
+    const savedTask = await savePlanningTask(taskToSave);
 
     console.log("[Planning] Después de llamar a Firestore para crear tarea", savedTask);
 
@@ -43,7 +44,17 @@ async function createPlanningTask(task) {
 }
 
 async function savePlanningTaskChanges(taskId, task) {
-    const updatedTask = updatePlanningTask(taskId, task);
+    if (!canCurrentUserModifyPlanningTasks()) {
+        console.warn("Acción no permitida");
+        return;
+    }
+
+    const currentTask = getPlanningTasks().find(item => item.id === taskId);
+    const taskToSave = preparePlanningTaskForSave({
+        ...task,
+        planningCode: currentTask?.planningCode || task.planningCode
+    });
+    const updatedTask = updatePlanningTask(taskId, taskToSave);
 
     if (updatedTask) {
         await updatePlanningTaskData(taskId, updatedTask);
@@ -121,6 +132,30 @@ async function deletePlanningTask(taskId) {
     return deletePlanningTaskAction(taskId);
 }
 
+async function exportPlanningToExcel() {
+    if (!canCurrentUserModifyPlanningTasks()) {
+        console.warn("Acción no permitida");
+        return;
+    }
+
+    if (!window.XLSX) {
+        console.error("No se pudo exportar Planning: la librería XLSX no está disponible.");
+        return;
+    }
+
+    const tasks = getPlanningTasks().filter(task => task.deleted !== true);
+    await loadPlanningTimelineForExport(tasks);
+
+    const workbook = XLSX.utils.book_new();
+
+    XLSX.utils.book_append_sheet(workbook, buildPlanningSheet(tasks), "Planning");
+    XLSX.utils.book_append_sheet(workbook, buildPlanningCommentsSheet(tasks), "Comentarios");
+    XLSX.utils.book_append_sheet(workbook, buildPlanningTimelineSheet(tasks), "Timeline");
+    XLSX.utils.book_append_sheet(workbook, buildPlanningSummarySheet(tasks), "Resumen");
+
+    XLSX.writeFile(workbook, getPlanningExcelFileName());
+}
+
 function addPlanningTaskCommentLocal(taskId, text) {
     addPlanningTaskComment(taskId, text);
     refreshPlanningBoard();
@@ -178,6 +213,191 @@ async function persistPlanningTimelineEvent(taskId, event) {
     } catch (error) {
         console.warn("No se pudo guardar el evento de timeline de Planificación en Firestore.", error);
     }
+}
+
+async function loadPlanningTimelineForExport(tasks) {
+    await Promise.all((tasks || []).map(async task => {
+        try {
+            task.timelineLocal = await loadPlanningTimeline(task.id);
+        } catch (error) {
+            console.warn("No se pudo cargar el timeline de una tarea para exportar Planning.", error);
+            task.timelineLocal = task.timelineLocal || [];
+        }
+    }));
+}
+
+function buildPlanningSheet(tasks) {
+    const headers = [
+        "ID",
+        "OT",
+        "Código PSI",
+        "Actividad",
+        "Cliente",
+        "Proyecto",
+        "Responsable",
+        "Estado",
+        "Motivo desviación",
+        "Prioridad",
+        "Complejidad",
+        "Puntos",
+        "Fecha creación",
+        "Fecha objetivo",
+        "Fecha inicio real",
+        "Fecha término real",
+        "Comentario inicial"
+    ];
+    const rows = tasks.map(task => ({
+        "ID": getPlanningTaskCode(task),
+        "OT": getPlanningTaskOTValue(task),
+        "Código PSI": getPlanningTaskPSICodeValue(task),
+        "Actividad": task.actividad || "",
+        "Cliente": task.cliente || "",
+        "Proyecto": task.proyecto || "",
+        "Responsable": getPlanningTaskResponsibleName(task),
+        "Estado": task.estado || "",
+        "Motivo desviación": getPlanningDeviationReasonForExport(task),
+        "Prioridad": task.prioridad || "",
+        "Complejidad": task.complejidad || "",
+        "Puntos": getPlanningTaskComplexityPoints(task),
+        "Fecha creación": formatPlanningExportDate(task.createdAt || task.fechaCreacion || ""),
+        "Fecha objetivo": task.fechaObjetivo || "",
+        "Fecha inicio real": task.inicioReal || "",
+        "Fecha término real": task.fechaTerminoReal || "",
+        "Comentario inicial": task.comentario || ""
+    }));
+
+    return XLSX.utils.json_to_sheet(rows, { header: headers });
+}
+
+function buildPlanningCommentsSheet(tasks) {
+    const headers = [
+        "Fecha",
+        "Usuario",
+        "Actividad",
+        "Comentario"
+    ];
+    const rows = [];
+
+    tasks.forEach(task => {
+        (task.comentariosLocales || []).forEach(comment => {
+            rows.push({
+                "Fecha": comment.date || formatPlanningExportDate(comment.createdAt || ""),
+                "Usuario": comment.user || "Adrián",
+                "Actividad": task.actividad || "",
+                "Comentario": comment.text || ""
+            });
+        });
+    });
+
+    return XLSX.utils.json_to_sheet(rows, { header: headers });
+}
+
+function buildPlanningTimelineSheet(tasks) {
+    const headers = [
+        "Fecha",
+        "Usuario",
+        "Acción",
+        "Actividad"
+    ];
+    const rows = [];
+
+    tasks.forEach(task => {
+        (task.timelineLocal || []).forEach(event => {
+            rows.push({
+                "Fecha": event.date || formatPlanningExportDate(event.createdAt || ""),
+                "Usuario": event.user || "Sistema",
+                "Acción": getPlanningTimelineExportAction(event),
+                "Actividad": task.actividad || ""
+            });
+        });
+    });
+
+    return XLSX.utils.json_to_sheet(rows, { header: headers });
+}
+
+function buildPlanningSummarySheet(tasks) {
+    const kpis = calculatePlanningKPIs(tasks);
+    const headers = [
+        "Indicador",
+        "Valor"
+    ];
+
+    return XLSX.utils.json_to_sheet([
+        { "Indicador": "Total", "Valor": kpis.total },
+        { "Indicador": "Pendientes", "Valor": kpis.pendientes },
+        { "Indicador": "En proceso", "Valor": kpis.enProceso },
+        { "Indicador": "Pausadas", "Valor": kpis.pausadas },
+        { "Indicador": "Terminadas", "Valor": kpis.terminadas },
+        { "Indicador": "Reprogramadas", "Valor": kpis.reprogramadas }
+    ], { header: headers });
+}
+
+function getPlanningTimelineExportAction(event) {
+    if (event.description) {
+        return event.description;
+    }
+
+    if (typeof getPlanningTimelineTypeLabel === "function") {
+        return getPlanningTimelineTypeLabel(event.type);
+    }
+
+    return event.type || "";
+}
+
+function formatPlanningExportDate(value) {
+    if (!value) return "";
+
+    const date = typeof value.toDate === "function"
+        ? value.toDate()
+        : value instanceof Date
+            ? value
+            : new Date(value);
+
+    if (Number.isNaN(date.getTime())) {
+        return value.toString();
+    }
+
+    return date.toLocaleString("es-CL", {
+        dateStyle: "short",
+        timeStyle: "short"
+    });
+}
+
+function getPlanningExcelFileName() {
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = String(now.getMonth() + 1).padStart(2, "0");
+    const day = String(now.getDate()).padStart(2, "0");
+    const hours = String(now.getHours()).padStart(2, "0");
+    const minutes = String(now.getMinutes()).padStart(2, "0");
+
+    return `Planning_PSI_${year}-${month}-${day}_${hours}-${minutes}.xlsx`;
+}
+
+function preparePlanningTaskForSave(task) {
+    const complexity = task.complejidad || "";
+
+    return {
+        ...task,
+        planningCode: isPlanningCode(task.planningCode) ? task.planningCode : generatePlanningCode(getPlanningTasks()),
+        motivo: task.motivo || "Sin desviación",
+        fechaCreacion: task.fechaCreacion || getCurrentPlanningTimestamp(),
+        complexityPoints: calculatePlanningComplexityPoints(complexity)
+    };
+}
+
+function getPlanningDeviationReasonForExport(task) {
+    const reason = (task.motivo || "").trim();
+
+    if (!reason || reason === "Sin desviación") {
+        return "";
+    }
+
+    return reason;
+}
+
+function isPlanningCode(value) {
+    return /^PP-\d{4}-\d{2}-\d{3}$/.test((value || "").toString());
 }
 
 document.addEventListener("DOMContentLoaded", initPlanning);

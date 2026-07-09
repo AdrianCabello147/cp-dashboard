@@ -229,6 +229,68 @@ function calculatePlanningKPIs(tasks) {
   return kpis;
 }
 
+function generatePlanningCode(tasks = PLANNING_TASKS, date = new Date()) {
+  const year = getISOWeekYear(date);
+  const week = String(getISOWeekNumber(date)).padStart(2, "0");
+  const prefix = `PP-${year}-${week}-`;
+  const maxCorrelative = (tasks || []).reduce((maxValue, task) => {
+    const code = task?.planningCode || "";
+
+    if (!code.startsWith(prefix)) {
+      return maxValue;
+    }
+
+    const correlative = Number.parseInt(code.slice(prefix.length), 10);
+
+    return Number.isNaN(correlative) ? maxValue : Math.max(maxValue, correlative);
+  }, 0);
+
+  return `${prefix}${String(maxCorrelative + 1).padStart(3, "0")}`;
+}
+
+function calculatePlanningComplexityPoints(complexity) {
+  const value = normalizePlanningFilterValue(complexity);
+
+  if (value === "baja") return 1;
+  if (value === "media") return 2;
+  if (value === "alta") return 3;
+  if (value === "muy alta") return 5;
+
+  return 0;
+}
+
+function getPlanningTaskComplexityPoints(task) {
+  if (typeof task?.complexityPoints === "number") {
+    return task.complexityPoints;
+  }
+
+  return calculatePlanningComplexityPoints(task?.complejidad);
+}
+
+function getPlanningTaskCode(task) {
+  return task?.planningCode || task?.id || "";
+}
+
+function getPlanningTaskOTValue(task) {
+  const value = task?.otPsi || task?.ot || "";
+
+  if (/^ot[\s-]*/i.test(value) || /^\d+$/.test(value.toString().trim())) {
+    return value;
+  }
+
+  return task?.productionOrder || "";
+}
+
+function getPlanningTaskPSICodeValue(task) {
+  const value = task?.otPsi || "";
+
+  if (value && !/^ot[\s-]*/i.test(value) && !/^\d+$/.test(value.toString().trim())) {
+    return value;
+  }
+
+  return task?.psiCode || task?.customSolution || "";
+}
+
 function getCurrentPlanningISOWeek() {
   return getISOWeekNumber(new Date());
 }
@@ -325,8 +387,11 @@ function removePlanningTaskFromBoard(taskId) {
 function buildDuplicatedPlanningTask(sourceTask) {
   return {
     semana: sourceTask.semana || "Semana actual",
+    planningCode: generatePlanningCode(),
     actividad: sourceTask.actividad || "",
     otPsi: sourceTask.otPsi || "",
+    psiCode: sourceTask.psiCode || sourceTask.customSolution || "",
+    productionOrder: sourceTask.productionOrder || "",
     cliente: sourceTask.cliente || "",
     proyecto: sourceTask.proyecto || "",
     responsableTaller: getPlanningTaskResponsibleName(sourceTask),
@@ -336,6 +401,8 @@ function buildDuplicatedPlanningTask(sourceTask) {
     estado: "Pendiente",
     prioridad: sourceTask.prioridad || "Normal",
     complejidad: sourceTask.complejidad || "Media",
+    complexityPoints: getPlanningTaskComplexityPoints(sourceTask),
+    motivo: sourceTask.motivo || "Sin desviación",
     fechaInicioPlanificada: sourceTask.fechaInicioPlanificada || "",
     fechaObjetivo: sourceTask.fechaObjetivo || "",
     comentario: sourceTask.comentario || "",
