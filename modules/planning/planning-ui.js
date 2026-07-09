@@ -365,6 +365,10 @@ function isPlanningSectionCollapsed(scope, responsible) {
 
   if (!state) return false;
 
+  if (state[responsible] === undefined && scope === "board") {
+    return true;
+  }
+
   return state[responsible] === true;
 }
 
