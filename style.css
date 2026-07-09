@@ -21,6 +21,7 @@
 
 html{
     overflow-y: scroll;
+    -webkit-text-size-adjust: 100%;
 }
 
 body{
@@ -1484,15 +1485,41 @@ body{
 
 @media screen and (max-width: 640px){
     .header{
+        box-sizing:border-box;
         align-items:flex-start;
+        flex-direction:column;
+        height:auto;
+        max-width:100%;
+        min-width:0;
+        overflow:visible;
+        width:100%;
+    }
+
+    .header-logo{
+        box-sizing:border-box;
+        max-width:100%;
+        min-width:0;
+        width:100%;
     }
 
     .header-info{
+        box-sizing:border-box;
+        max-width:100%;
         min-width:0;
+        width:100%;
+    }
+
+    .header-info h1,
+    .header-info p{
+        max-width:100%;
+        overflow-wrap:anywhere;
     }
 
     .logout-btn{
+        box-sizing:border-box;
         margin-left:0;
+        max-width:100%;
+        min-width:0;
         width:100%;
     }
 
