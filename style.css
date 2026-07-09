@@ -342,11 +342,12 @@ body{
     .header{
         display:flex;
         align-items:center;
+        flex-wrap:wrap;
         gap:16px;
         padding:18px;
         border-radius:18px;
         margin-bottom:18px;
-        overflow:hidden;
+        overflow:visible;
     }
 
     .header-logo{
@@ -374,6 +375,12 @@ body{
     .header-info p{
         font-size:15px;
         line-height:1.25;
+    }
+
+    .logout-btn{
+        margin-left:auto;
+        max-width:100%;
+        white-space:nowrap;
     }
 
     .resumen{
@@ -1467,6 +1474,33 @@ body{
     .planning-hero {
         align-items: flex-start;
         flex-direction: column;
+    }
+
+    .planning-hero-actions {
+        justify-content: flex-start;
+        width: 100%;
+    }
+}
+
+@media screen and (max-width: 640px){
+    .header{
+        align-items:flex-start;
+    }
+
+    .header-info{
+        min-width:0;
+    }
+
+    .logout-btn{
+        margin-left:0;
+        width:100%;
+    }
+
+    .planning-hero-actions .primary-btn,
+    .planning-hero-actions .secondary-btn{
+        flex:1 1 160px;
+        max-width:100%;
+        text-align:center;
     }
 }
 
