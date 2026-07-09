@@ -139,6 +139,12 @@ function getPlanningTasks() {
   return PLANNING_TASKS;
 }
 
+function setPlanningTasks(tasks) {
+  PLANNING_TASKS = tasks || [];
+
+  return PLANNING_TASKS;
+}
+
 function getProductionOrders() {
   return PLANNING_PRODUCTION_ORDERS;
 }
@@ -234,7 +240,7 @@ function filterPlanningTasks(tasks, filters) {
 }
 
 function addPlanningTask(task) {
-  const taskId = `TASK-${Date.now()}`;
+  const taskId = task.id || `TASK-${Date.now()}`;
 
   PLANNING_TASKS.push({
     id: taskId,
@@ -245,16 +251,18 @@ function addPlanningTask(task) {
     ]
   });
 
-  return PLANNING_TASKS;
+  return PLANNING_TASKS.find(existingTask => existingTask.id === taskId);
 }
 
 function updatePlanningTask(taskId, task) {
+  let updatedTask = null;
+
   PLANNING_TASKS = PLANNING_TASKS.map(existingTask => {
     if (existingTask.id !== taskId) {
       return existingTask;
     }
 
-    return {
+    updatedTask = {
       ...existingTask,
       ...task,
       timelineLocal: [
@@ -262,13 +270,16 @@ function updatePlanningTask(taskId, task) {
         createPlanningTimelineEvent("edit", "Tarea editada")
       ]
     };
+
+    return updatedTask;
   });
 
-  return PLANNING_TASKS;
+  return updatedTask;
 }
 
 function executePlanningTask(taskId, action) {
   const timestamp = getCurrentPlanningTimestamp();
+  let updatedTask = null;
 
   PLANNING_TASKS = PLANNING_TASKS.map(existingTask => {
     if (existingTask.id !== taskId) {
@@ -316,13 +327,15 @@ function executePlanningTask(taskId, action) {
       taskUpdate.fechaTerminoReal = timestamp;
     }
 
-    return {
+    updatedTask = {
       ...existingTask,
       ...taskUpdate
     };
+
+    return updatedTask;
   });
 
-  return PLANNING_TASKS;
+  return updatedTask;
 }
 
 function addPlanningTaskComment(taskId, text) {

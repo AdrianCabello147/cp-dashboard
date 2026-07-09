@@ -1941,8 +1941,24 @@ body{
 
 .modal-actions {
     display: flex;
+    align-items: center;
     justify-content: flex-end;
     gap: 10px;
+}
+
+.task-modal-error {
+    flex: 1;
+    margin: 0;
+    color: #b42318;
+    font-size: 0.86rem;
+    font-weight: 700;
+    line-height: 1.35;
+    text-align: left;
+}
+
+.primary-btn:disabled {
+    cursor: not-allowed;
+    background: #98a2b3;
 }
 
 .secondary-btn {

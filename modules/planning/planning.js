@@ -1,4 +1,10 @@
-function initPlanning() {
+async function initPlanning() {
+    try {
+        await loadPlanningTasksFromDataSource();
+    } catch (error) {
+        console.error("No se pudieron cargar las tareas de Planificación.", error);
+    }
+
     refreshPlanningBoard();
 }
 
@@ -7,18 +13,39 @@ function refreshPlanningBoard() {
     renderPlanningModule(tasks);
 }
 
-function createPlanningTask(task) {
-    addPlanningTask(task);
+async function loadPlanningTasksFromDataSource() {
+    const tasks = await loadPlanningTasks();
+    setPlanningTasks(tasks);
+}
+
+async function createPlanningTask(task) {
+    console.log("[Planning] Antes de llamar a Firestore para crear tarea");
+
+    const savedTask = await savePlanningTask(task);
+
+    console.log("[Planning] Después de llamar a Firestore para crear tarea", savedTask);
+
+    addPlanningTask(savedTask);
     refreshPlanningBoard();
 }
 
-function savePlanningTaskChanges(taskId, task) {
-    updatePlanningTask(taskId, task);
+async function savePlanningTaskChanges(taskId, task) {
+    const updatedTask = updatePlanningTask(taskId, task);
+
+    if (updatedTask) {
+        await updatePlanningTaskData(taskId, updatedTask);
+    }
+
     refreshPlanningBoard();
 }
 
-function executePlanningTaskAction(taskId, action) {
-    executePlanningTask(taskId, action);
+async function executePlanningTaskAction(taskId, action) {
+    const updatedTask = executePlanningTask(taskId, action);
+
+    if (updatedTask) {
+        await updatePlanningTaskData(taskId, updatedTask);
+    }
+
     refreshPlanningBoard();
 }
 

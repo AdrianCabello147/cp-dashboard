@@ -685,6 +685,7 @@ function renderNewTaskModal() {
           </label>
 
           <div class="modal-actions">
+            <p id="taskModalError" class="task-modal-error" role="alert" hidden></p>
             <button type="button" class="secondary-btn" onclick="closeNewTaskModal()">Cancelar</button>
             <button id="taskModalSubmit" type="submit" class="primary-btn">Guardar tarea</button>
           </div>
@@ -700,6 +701,11 @@ async function handleNewTaskSubmit(event) {
 
     const form = event.target;
     const formData = new FormData(form);
+    const taskId = formData.get("taskId");
+    const submitLabel = taskId ? "Guardar cambios" : "Guardar tarea";
+
+    setPlanningTaskModalError("");
+    setPlanningTaskSavingState(true);
 
     const task = {
 
@@ -726,15 +732,20 @@ async function handleNewTaskSubmit(event) {
 
     };
 
-    const taskId = formData.get("taskId");
+    try {
+        if (taskId) {
+            await savePlanningTaskChanges(taskId, task);
+        } else {
+            await createPlanningTask(task);
+        }
 
-    if (taskId) {
-        await savePlanningTaskChanges(taskId, task);
-    } else {
-        await createPlanningTask(task);
+        closeNewTaskModal();
+    } catch (error) {
+        console.error("No se pudo guardar la tarea de Planificación.", error);
+        setPlanningTaskModalError("No se pudo guardar la tarea. Revisa conexión o permisos de Firestore.");
+    } finally {
+        setPlanningTaskSavingState(false, submitLabel);
     }
-
-    closeNewTaskModal();
 
 }
 
@@ -750,6 +761,8 @@ function openNewTaskModal() {
   setPlanningModalMode("create");
   handlePlanningTypeChange();
   clearPlanningOTInfo();
+  setPlanningTaskModalError("");
+  setPlanningTaskSavingState(false);
 
   if (modal) modal.hidden = false;
 }
@@ -764,6 +777,8 @@ function closeNewTaskModal() {
   }
 
   clearPlanningOTInfo();
+  setPlanningTaskModalError("");
+  setPlanningTaskSavingState(false);
 
   if (modal) {
     modal.hidden = true;
@@ -805,6 +820,32 @@ function setPlanningModalMode(mode) {
 
   if (title) title.textContent = "Nueva tarea";
   if (submit) submit.textContent = "Guardar tarea";
+}
+
+function setPlanningTaskSavingState(isSaving, label = null) {
+  const submit = document.getElementById("taskModalSubmit");
+
+  if (!submit) return;
+
+  submit.disabled = isSaving;
+  submit.textContent = isSaving ? "Guardando..." : (label || getPlanningTaskSubmitLabel());
+}
+
+function getPlanningTaskSubmitLabel() {
+  const form = document.getElementById("newTaskForm");
+
+  if (!form) return "Guardar tarea";
+
+  return form.elements.taskId.value ? "Guardar cambios" : "Guardar tarea";
+}
+
+function setPlanningTaskModalError(message) {
+  const error = document.getElementById("taskModalError");
+
+  if (!error) return;
+
+  error.textContent = message;
+  error.hidden = !message;
 }
 
 function fillPlanningTaskForm(form, task) {
@@ -946,12 +987,12 @@ function clearPlanningOTInfo() {
   otInfo.innerHTML = "";
 }
 
-function handlePlanningExecutionAction(taskId, action, event) {
+async function handlePlanningExecutionAction(taskId, action, event) {
   if (event) {
     event.stopPropagation();
   }
 
-  executePlanningTaskAction(taskId, action);
+  await executePlanningTaskAction(taskId, action);
 }
 
 function openPlanningComments(taskId, event) {
