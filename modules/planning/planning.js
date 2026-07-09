@@ -1,11 +1,22 @@
 async function initPlanning() {
     try {
+        await loadPlanningResponsibleUsersFromDataSource();
         await loadPlanningTasksFromDataSource();
     } catch (error) {
         console.error("No se pudieron cargar las tareas de Planificación.", error);
     }
 
     refreshPlanningBoard();
+}
+
+async function loadPlanningResponsibleUsersFromDataSource() {
+    try {
+        const users = await loadPlanningResponsibleUsers();
+        setPlanningResponsibleUsers(users);
+    } catch (error) {
+        console.warn("No se pudieron cargar responsables desde Firestore. Se usará la lista fija de respaldo.", error);
+        setPlanningResponsibleUsers(null);
+    }
 }
 
 function refreshPlanningBoard() {

@@ -1,13 +1,32 @@
+import { FEATURES } from "./features.js";
+
 const APP_MODULES = {
   certificaciones: {
+    feature: "certifications",
     sectionId: "certificacionesModule",
     title: "PSI Operations Platform",
-    subtitle: "Seguimiento automático de certificaciones, planificación y gestión PSI."
+    subtitle: "Seguimiento automático de certificaciones, planificación y gestión PSI.",
+    label: "Certificaciones"
   },
   planificacion: {
+    feature: "planning",
     sectionId: "planificacionModule",
     title: "Planificación",
-    subtitle: "Planificación semanal de actividades PSI por responsable."
+    subtitle: "Planificación semanal de actividades PSI por responsable.",
+    label: "Planificación"
+  },
+  produccion: {
+    feature: "production",
+    sectionId: "produccionModule",
+    title: "Producción",
+    subtitle: "Control local de órdenes de trabajo PSI por estado de fabricación.",
+    label: "Producción",
+    scripts: [
+      "modules/production/production-engine.js",
+      "modules/production/production-services.js",
+      "modules/production/production-ui.js",
+      "modules/production/production.js"
+    ]
   }
 };
 
@@ -16,14 +35,62 @@ function actualizarHeader(titulo, subtitulo) {
   const pageSubtitle = document.getElementById("pageSubtitle");
 
   pageTitle.textContent = titulo;
-
   pageSubtitle.textContent = subtitulo;
 }
 
-function activateModule(moduleName) {
+function isFeatureEnabled(moduleConfig) {
+  return FEATURES[moduleConfig.feature] === true;
+}
+
+function getEnabledModuleEntries() {
+  return Object.entries(APP_MODULES).filter(([, config]) => isFeatureEnabled(config));
+}
+
+function renderModuleTabs() {
+  const nav = document.querySelector(".module-tabs");
+
+  if (!nav) return;
+
+  nav.innerHTML = getEnabledModuleEntries().map(([moduleName, config]) => `
+    <button class="module-tab" data-module="${moduleName}">
+      ${config.label}
+    </button>
+  `).join("");
+}
+
+async function loadModuleScripts(config) {
+  if (!config.scripts || config.scriptsLoaded) return;
+
+  for (const src of config.scripts) {
+    await loadScript(src);
+  }
+
+  config.scriptsLoaded = true;
+}
+
+function loadScript(src) {
+  return new Promise((resolve, reject) => {
+    const existingScript = document.querySelector(`script[src="${src}"]`);
+
+    if (existingScript) {
+      resolve();
+      return;
+    }
+
+    const script = document.createElement("script");
+    script.src = src;
+    script.onload = resolve;
+    script.onerror = reject;
+    document.body.appendChild(script);
+  });
+}
+
+async function activateModule(moduleName) {
   const config = APP_MODULES[moduleName];
 
-  if (!config) return;
+  if (!config || !isFeatureEnabled(config)) return;
+
+  await loadModuleScripts(config);
 
   document.querySelectorAll(".module-tab").forEach(tab => {
     tab.classList.toggle("active", tab.dataset.module === moduleName);
@@ -43,7 +110,20 @@ function activateModule(moduleName) {
   localStorage.setItem("activeModule", moduleName);
 }
 
+function getInitialModule() {
+  const savedModule = localStorage.getItem("activeModule");
+  const enabledModules = getEnabledModuleEntries().map(([moduleName]) => moduleName);
+
+  if (savedModule && enabledModules.includes(savedModule)) {
+    return savedModule;
+  }
+
+  return enabledModules[0] || "";
+}
+
 function initAppNavigation() {
+  renderModuleTabs();
+
   const tabs = document.querySelectorAll(".module-tab");
 
   tabs.forEach(tab => {
@@ -52,8 +132,7 @@ function initAppNavigation() {
     });
   });
 
-  const savedModule = localStorage.getItem("activeModule") || "certificaciones";
-  activateModule(savedModule);
+  activateModule(getInitialModule());
 }
 
 document.addEventListener("DOMContentLoaded", initAppNavigation);

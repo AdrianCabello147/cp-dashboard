@@ -4,6 +4,11 @@ const PLANNING_USERS = [
   "David"
 ];
 
+let PLANNING_RESPONSIBLE_USERS = PLANNING_USERS.map(name => ({
+  uid: name,
+  name
+}));
+
 /* =====================================================
    OT MAESTRA LOCAL / MOCK
    Reemplazable por Google Sheets en una etapa posterior.
@@ -139,6 +144,32 @@ function getPlanningTasks() {
   return PLANNING_TASKS;
 }
 
+function getPlanningResponsibleUsers() {
+  return PLANNING_RESPONSIBLE_USERS;
+}
+
+function getPlanningResponsibleNames() {
+  return PLANNING_RESPONSIBLE_USERS.map(user => user.name);
+}
+
+function setPlanningResponsibleUsers(users) {
+  if (!users) {
+    PLANNING_RESPONSIBLE_USERS = PLANNING_USERS.map(name => ({
+      uid: name,
+      name
+    }));
+
+    return PLANNING_RESPONSIBLE_USERS;
+  }
+
+  PLANNING_RESPONSIBLE_USERS = users.map(user => ({
+    uid: user.uid || user.name,
+    name: user.name
+  }));
+
+  return PLANNING_RESPONSIBLE_USERS;
+}
+
 function setPlanningTasks(tasks) {
   PLANNING_TASKS = tasks || [];
 
@@ -223,7 +254,7 @@ function filterPlanningTasks(tasks, filters) {
     const status = normalizePlanningFilterValue(task.estado);
     const priority = normalizePlanningFilterValue(task.prioridad);
     const complexity = normalizePlanningFilterValue(task.complejidad);
-    const responsible = normalizePlanningFilterValue(task.responsableTaller);
+    const responsible = normalizePlanningFilterValue(getPlanningTaskResponsibleName(task));
 
     const matchesResponsible = !filters.responsable ||
       responsible === normalizePlanningFilterValue(filters.responsable);
@@ -298,7 +329,9 @@ function buildDuplicatedPlanningTask(sourceTask) {
     otPsi: sourceTask.otPsi || "",
     cliente: sourceTask.cliente || "",
     proyecto: sourceTask.proyecto || "",
-    responsableTaller: sourceTask.responsableTaller || "",
+    responsableTaller: getPlanningTaskResponsibleName(sourceTask),
+    responsibleUid: sourceTask.responsibleUid || "",
+    responsibleName: getPlanningTaskResponsibleName(sourceTask),
     tipo: sourceTask.tipo || "",
     estado: "Pendiente",
     prioridad: sourceTask.prioridad || "Normal",
@@ -536,12 +569,12 @@ function getISOWeekYear(date) {
 function groupPlanningTasksByUser(tasks) {
   const grouped = {};
 
-  PLANNING_USERS.forEach(user => {
+  getPlanningResponsibleNames().forEach(user => {
     grouped[user] = [];
   });
 
   tasks.forEach(task => {
-    const responsable = task.responsableTaller || "Sin responsable";
+    const responsable = getPlanningTaskResponsibleName(task) || "Sin responsable";
 
     if (!grouped[responsable]) {
       grouped[responsable] = [];
@@ -551,4 +584,8 @@ function groupPlanningTasksByUser(tasks) {
   });
 
   return grouped;
+}
+
+function getPlanningTaskResponsibleName(task) {
+  return task.responsibleName || task.responsableTaller || task.responsible || "";
 }

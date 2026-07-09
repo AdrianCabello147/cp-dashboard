@@ -1,4 +1,4 @@
-import { db } from "./firebase-config.js";
+import { auth, db } from "./firebase-config.js";
 
 import {
     collection,
@@ -23,6 +23,103 @@ const TASKS = collection(db, "tasks");
 const COMMENTS = collection(db, "comments");
 const TIMELINE = collection(db, "timeline");
 const OWNERS = collection(db, "owners");
+const USERS = collection(db, "users");
+
+/* =====================================================
+   USERS
+===================================================== */
+
+export async function ensureUserProfile(user) {
+
+    if (!user?.uid) {
+        return null;
+    }
+
+    const userRef = doc(db, "users", user.uid);
+    const snapshot = await getDoc(userRef);
+
+    if (!snapshot.exists()) {
+        const profile = {
+            name: user.displayName || user.email || "",
+            email: user.email || "",
+            role: "operator",
+            active: true,
+            createdAt: serverTimestamp(),
+            lastLogin: serverTimestamp()
+        };
+
+        await setDoc(userRef, profile);
+
+        return {
+            id: user.uid,
+            ...profile
+        };
+    }
+
+    await updateDoc(userRef, {
+        lastLogin: serverTimestamp()
+    });
+
+    return {
+        id: snapshot.id,
+        ...snapshot.data()
+    };
+
+}
+
+export async function getCurrentUserProfile() {
+
+    const user = auth.currentUser;
+
+    if (!user?.uid) {
+        return null;
+    }
+
+    const snapshot = await getDoc(doc(db, "users", user.uid));
+
+    if (!snapshot.exists()) {
+        return null;
+    }
+
+    return {
+        id: snapshot.id,
+        ...snapshot.data()
+    };
+
+}
+
+export async function getActiveUsers() {
+
+    const q = query(
+        USERS,
+        where("active", "==", true)
+    );
+
+    const snapshot = await getDocs(q);
+
+    return snapshot.docs.map(doc => ({
+        uid: doc.id,
+        ...doc.data()
+    }));
+
+}
+
+export async function getAssignableUsers() {
+
+    const q = query(
+        USERS,
+        where("active", "==", true),
+        where("assignable", "==", true)
+    );
+
+    const snapshot = await getDocs(q);
+
+    return snapshot.docs.map(doc => ({
+        uid: doc.id,
+        ...doc.data()
+    }));
+
+}
 
 /* =====================================================
    TASKS
@@ -159,5 +256,6 @@ export {
     TASKS,
     COMMENTS,
     TIMELINE,
-    OWNERS
+    OWNERS,
+    USERS
 };

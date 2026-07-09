@@ -1,198 +1,155 @@
-function actualizarResumenProduccionDesdeKPIs(kpis) {
-    document.getElementById("totalOT").textContent = kpis.totalOT;
-    document.getElementById("accionesHoy").textContent = kpis.enRiesgo;
-    document.getElementById("otRiesgo").textContent = kpis.enRiesgo;
-    document.getElementById("otListas").textContent = kpis.listasParaEnsamblar;
+function renderProductionModule(orders) {
+  const container = document.getElementById("produccionModule");
+
+  if (!container) return;
+
+  const kpis = calculateProductionKPIs(orders);
+  const groupedOrders = groupProductionOrdersByStatus(orders);
+  const statuses = Object.keys(groupedOrders);
+
+  container.innerHTML = `
+    <section class="planning-hero">
+      <div>
+        <h2>Producción</h2>
+        <p>Control local de órdenes de trabajo PSI por estado de fabricación.</p>
+      </div>
+    </section>
+
+    ${renderProductionKPIs(kpis)}
+
+    <section class="planning-weekly">
+      <div class="planning-weekly-header">
+        <div>
+          <h3>Tablero de Producción</h3>
+          <p>Órdenes agrupadas por estado operacional.</p>
+        </div>
+        <span>${orders.length} OT</span>
+      </div>
+
+      ${renderProductionAccordionControls(statuses)}
+      ${renderProductionBoard(groupedOrders)}
+    </section>
+  `;
 }
 
-function obtenerBadge(prioridad) {
-    if (prioridad === "Crítica") return "danger";
-    if (prioridad === "Alta") return "warning";
-    if (prioridad === "Media") return "warning";
-    return "success";
-}
+function renderProductionKPIs(kpis) {
+  const items = [
+    ["Total OT", kpis.total],
+    ["Pendiente revisión", kpis.pendingReview],
+    ["Materiales pendientes", kpis.waitingMaterials],
+    ["En fabricación", kpis.inFabrication],
+    ["En prueba", kpis.inTest],
+    ["Atrasadas", kpis.overdue],
+    ["Entregadas", kpis.delivered]
+  ];
 
-function obtenerAgendaClase(prioridad) {
-    if (prioridad === "Crítica") return "critical";
-    if (prioridad === "Alta") return "high";
-    if (prioridad === "Media") return "medium";
-    return "";
-}
-
-function obtenerNombreEtapa(etapa) {
-    return PRODUCTION_STAGES[etapa]?.name || etapa || "Sin etapa";
-}
-
-function renderControlCenter(data) {
-    const container = document.getElementById("controlCenterContent");
-
-    const criticas = data.filter(ot => ot.prioridad === "Crítica").length;
-    const altas = data.filter(ot => ot.prioridad === "Alta").length;
-    const bloqueadas = data.filter(ot => ot.alerts.length > 0).length;
-
-    const agendaPorResponsable = agruparTareasPorResponsable(data);
-
-    const cargaEquipo = Object.entries(agendaPorResponsable)
-        .map(([responsable, tareas]) => `
-            <li>${responsable}: <strong>${tareas.length}</strong></li>
-        `)
-        .join("");
-
-    const accionesRecomendadas = data
-        .filter(ot => ot.alerts.length > 0 || ot.prioridad === "Crítica")
-        .slice(0, 4)
-        .map(ot => `
-            <li>
-                <strong>OT ${ot.productionOrder}</strong> · ${ot.accion}
-            </li>
-        `)
-        .join("");
-
-    container.innerHTML = `
-        <article class="control-card">
-            <h4>🚨 Estado General</h4>
-            <ul>
-                <li>OT críticas: <strong>${criticas}</strong></li>
-                <li>OT alta prioridad: <strong>${altas}</strong></li>
-                <li>OT con alertas: <strong>${bloqueadas}</strong></li>
-            </ul>
+  return `
+    <section class="planning-kpis">
+      ${items.map(([label, value]) => `
+        <article class="planning-kpi-card">
+          <span>${label}</span>
+          <strong>${value}</strong>
         </article>
-
-        <article class="control-card">
-            <h4>👥 Carga del equipo</h4>
-            <ul>
-                ${cargaEquipo || "<li>Sin tareas asignadas</li>"}
-            </ul>
-        </article>
-
-        <article class="control-card">
-            <h4>🎯 Acciones recomendadas</h4>
-            <ul>
-                ${accionesRecomendadas || "<li>Sin acciones críticas</li>"}
-            </ul>
-        </article>
-    `;
+      `).join("")}
+    </section>
+  `;
 }
 
-function renderAgenda(data) {
-    const agenda = document.getElementById("agendaList");
+function renderProductionAccordionControls(statuses) {
+  const escapedStatuses = statuses.map(escapeProductionAttribute);
 
-    const ensamble = data.filter(ot => ot.etapa === "ASSEMBLY");
-    const picking = data.filter(ot => ot.etapa === "PICKING");
-    const materiales = data.filter(ot => ot.etapa === "WAITING_MATERIALS");
-    const soportes = data.filter(ot => ot.etapa === "SUPPORTS");
-    const documentacion = data.filter(ot => ot.etapa === "DOCUMENTATION");
-
-    agenda.innerHTML = `
-        ${renderWorkCategory("🔧 Ensamble", ensamble)}
-        ${renderWorkCategory("📦 Picking / Preensambles", picking)}
-        ${renderWorkCategory("🚚 Materiales por llegar", materiales, true)}
-        ${renderWorkCategory("🛠 Soportes", soportes)}
-        ${renderWorkCategory("📄 Documentación", documentacion)}
-        ${renderQuotesPlaceholder()}
-    `;
+  return `
+    <div class="planning-accordion-controls">
+      <button type="button" class="task-action-btn" onclick="setProductionSectionsCollapsed([${escapedStatuses.join(",")}], false)">
+        Expandir todo
+      </button>
+      <button type="button" class="task-action-btn" onclick="setProductionSectionsCollapsed([${escapedStatuses.join(",")}], true)">
+        Contraer todo
+      </button>
+    </div>
+  `;
 }
 
-function renderWorkCategory(title, items, showMaterialDate = false) {
-    if (!items || items.length === 0) {
-        return `
-            <article class="agenda-item">
-                <div>
-                    <strong>${title}</strong>
-                    <span>Sin tareas disponibles</span>
-                </div>
-            </article>
-        `;
-    }
-
-    return `
-        <article class="agenda-item">
-            <div>
-                <strong>${title} (${items.length})</strong>
-
-                ${items.slice(0, 6).map(ot => `
-                    <span>
-                        OT ${ot.productionOrder}
-                        · ${ot.customer}
-                        · ${ot.customSolution}
-                        ${showMaterialDate && ot.latestMaterialDate ? `· Llegada: ${ot.latestMaterialDate}` : ""}
-                    </span>
-                `).join("")}
-            </div>
-        </article>
-    `;
+function renderProductionBoard(groupedOrders) {
+  return `
+    <section class="planning-board">
+      ${Object.entries(groupedOrders).map(([status, orders]) => renderProductionColumn(status, orders)).join("")}
+    </section>
+  `;
 }
 
-function renderQuotesPlaceholder() {
-    return `
-        <article class="agenda-item">
-            <div>
-                <strong>💰 Cotizaciones</strong>
-                <span>Integración pendiente en Beta</span>
-            </div>
-        </article>
-    `;
+function renderProductionColumn(status, orders) {
+  const collapsed = isProductionSectionCollapsed(status);
+
+  return `
+    <article class="planning-column ${collapsed ? "is-collapsed" : ""}">
+      <button type="button" class="planning-column-header planning-accordion-header" onclick="toggleProductionSection('${escapeProductionHtml(status)}')">
+        <h3>
+          <span class="planning-accordion-arrow">▼</span>
+          ${escapeProductionHtml(status)}
+        </h3>
+        <span>${orders.length} OT</span>
+      </button>
+
+      <div class="planning-accordion-content">
+        ${
+          orders.length === 0
+            ? `<div class="comments-empty">Sin órdenes en este estado.</div>`
+            : orders.map(renderProductionCard).join("")
+        }
+      </div>
+    </article>
+  `;
 }
 
-function renderProductionTable(data) {
-    const tbody = document.getElementById("productionTableBody");
+function renderProductionCard(order) {
+  const overdueClass = isProductionOrderOverdue(order) ? "task-card-paused" : "";
 
-    tbody.innerHTML = data.map(item => `
-        <tr>
-            <td>
-                <span class="badge ${obtenerBadge(item.prioridad)}">
-                    ${item.prioridad}
-                </span>
-            </td>
+  return `
+    <article class="task-card ${getProductionPriorityClass(order.priority)} ${overdueClass}">
+      <div class="task-card-header">
+        <div class="task-title-block">
+          <strong>${escapeProductionHtml(order.productionOrder)}</strong>
+          <p>${escapeProductionHtml(order.psiCode)}</p>
+        </div>
+        <span class="task-priority ${getProductionPriorityClass(order.priority)}">
+          ${escapeProductionHtml(order.priority)}
+        </span>
+      </div>
 
-            <td>${item.productionOrder}</td>
-            <td>${item.customer}</td>
-            <td>${item.customSolution}</td>
-            <td>${obtenerNombreEtapa(item.etapa)}</td>
-            <td>${item.dueDate}</td>
+      <div class="task-context">
+        <span>${escapeProductionHtml(order.customer)}</span>
+        <span>${escapeProductionHtml(order.description)}</span>
+      </div>
 
-            <td>
-                ${item.estado}
-                ${
-                    item.alerts.length > 0
-                        ? `<br><small style="color:#d32f2f;">⚠ ${item.alerts.length} alerta(s)</small>`
-                        : ""
-                }
-                ${renderMaterialInfo(item)}
-            </td>
-
-            <td>
-                ${item.bloqueador || "—"}
-                <br>
-                <small>${item.progress}% avance</small>
-            </td>
-
-            <td>
-                <strong>${item.tasks[0]?.title || item.accion}</strong>
-                <br>
-                <small>${item.tasks[0]?.responsible || item.responsable}</small>
-            </td>
-
-            <td>${item.owner || item.responsable || "Sin asignar"}</td>
-        </tr>
-    `).join("");
+      <div class="task-meta">
+        <span>Cantidad: ${escapeProductionHtml(order.quantity)}</span>
+        <span>Responsable: ${escapeProductionHtml(order.responsible)}</span>
+        <span>Target Day: ${escapeProductionHtml(order.targetDate)}</span>
+      </div>
+    </article>
+  `;
 }
 
-function renderMaterialInfo(item) {
-    if (item.etapa !== "WAITING_MATERIALS") return "";
+function getProductionPriorityClass(priority) {
+  const normalized = (priority || "").toLowerCase();
 
-    const componente = item.mainMissingComponent;
+  if (normalized === "alta") return "priority-high";
+  if (normalized === "media") return "priority-medium";
+  if (normalized === "baja") return "priority-low";
 
-    return `
-        <br>
-        <small>
-            Material faltante:
-            ${componente ? componente.itemCode : "Por revisar"}
-        </small>
-        <br>
-        <small>
-            Llegada más lejana:
-            ${item.latestMaterialDate || "Sin fecha"}
-        </small>
-    `;
+  return "priority-normal";
+}
+
+function escapeProductionHtml(value) {
+  return (value ?? "").toString()
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
+}
+
+function escapeProductionAttribute(value) {
+  return `'${escapeProductionHtml(value)}'`;
 }

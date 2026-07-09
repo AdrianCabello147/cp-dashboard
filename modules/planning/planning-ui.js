@@ -189,7 +189,7 @@ function renderPlanningFilters() {
         Responsable
         <select onchange="updatePlanningFilter('responsable', this.value)">
           ${renderPlanningFilterOption("", "Todos", PLANNING_FILTERS.responsable)}
-          ${PLANNING_USERS.map(user => renderPlanningFilterOption(user, user, PLANNING_FILTERS.responsable)).join("")}
+          ${getPlanningResponsibleNames().map(user => renderPlanningFilterOption(user, user, PLANNING_FILTERS.responsable)).join("")}
         </select>
       </label>
 
@@ -622,10 +622,8 @@ function renderNewTaskModal() {
 
             <label>
               Responsable Taller PSI
-              <select name="responsableTaller">
-                <option>Juan Carlos</option>
-                <option>Santiago</option>
-                <option>David</option>
+              <select name="responsibleUid">
+                ${renderPlanningResponsibleOptions()}
               </select>
             </label>
 
@@ -709,6 +707,7 @@ async function handleNewTaskSubmit(event) {
     const formData = new FormData(form);
     const taskId = formData.get("taskId");
     const submitLabel = taskId ? "Guardar cambios" : "Guardar tarea";
+    const responsibleUser = getPlanningSelectedResponsibleUser(form);
 
     setPlanningTaskModalError("");
     setPlanningTaskSavingState(true);
@@ -720,7 +719,9 @@ async function handleNewTaskSubmit(event) {
         cliente: formData.get("cliente") || "",
         proyecto: formData.get("proyecto") || "",
 
-        responsableTaller: formData.get("responsableTaller") || "",
+        responsableTaller: responsibleUser.name,
+        responsibleUid: responsibleUser.uid,
+        responsibleName: responsibleUser.name,
 
         tipo: formData.get("tipo") || "",
 
@@ -762,6 +763,7 @@ function openNewTaskModal() {
   if (form) {
     form.reset();
     form.elements.taskId.value = "";
+    form.elements.responsibleUid.innerHTML = renderPlanningResponsibleOptions();
   }
 
   setPlanningModalMode("create");
@@ -828,6 +830,31 @@ function setPlanningModalMode(mode) {
   if (submit) submit.textContent = "Guardar tarea";
 }
 
+function renderPlanningResponsibleOptions(selectedUid = "") {
+  return getPlanningResponsibleUsers().map(user => `
+    <option value="${escapePlanningAttribute(user.uid)}" ${user.uid === selectedUid ? "selected" : ""}>
+      ${escapePlanningHtml(user.name)}
+    </option>
+  `).join("");
+}
+
+function getPlanningSelectedResponsibleUser(form) {
+  const selectedUid = form.elements.responsibleUid?.value || "";
+  const users = getPlanningResponsibleUsers();
+  const selectedUser = users.find(user => user.uid === selectedUid);
+
+  if (selectedUser) {
+    return selectedUser;
+  }
+
+  const selectedOption = form.elements.responsibleUid?.selectedOptions?.[0];
+
+  return {
+    uid: selectedUid,
+    name: selectedOption?.textContent?.trim() || ""
+  };
+}
+
 function setPlanningTaskSavingState(isSaving, label = null) {
   const submit = document.getElementById("taskModalSubmit");
 
@@ -860,7 +887,20 @@ function fillPlanningTaskForm(form, task) {
   form.elements.otPsi.value = task.otPsi || "";
   form.elements.cliente.value = task.cliente || "";
   form.elements.proyecto.value = task.proyecto || "";
-  form.elements.responsableTaller.value = task.responsableTaller || "Juan Carlos";
+  const responsibleName = getPlanningTaskResponsibleName(task);
+  const responsibleUser = getPlanningResponsibleUsers().find(user =>
+    user.uid === task.responsibleUid || user.name === responsibleName
+  );
+  const legacyResponsibleOption = responsibleUser || !responsibleName
+    ? ""
+    : `<option value="${escapePlanningAttribute(task.responsibleUid || responsibleName)}" selected>${escapePlanningHtml(responsibleName)}</option>`;
+
+  form.elements.responsibleUid.innerHTML = legacyResponsibleOption + renderPlanningResponsibleOptions(responsibleUser?.uid || "");
+  form.elements.responsibleUid.value = responsibleUser?.uid || getPlanningResponsibleUsers()[0]?.uid || "";
+
+  if (legacyResponsibleOption) {
+    form.elements.responsibleUid.value = task.responsibleUid || responsibleName;
+  }
   form.elements.tipo.value = task.tipo || "Orden de Trabajo OT";
   form.elements.estado.value = task.estado || "Pendiente";
   form.elements.prioridad.value = task.prioridad || "Normal";

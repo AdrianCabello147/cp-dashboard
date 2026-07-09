@@ -1,5 +1,6 @@
 import { auth } from "./firebase-config.js";
 import { signInWithEmailAndPassword } from "https://www.gstatic.com/firebasejs/12.15.0/firebase-auth.js";
+import { ensureUserProfile } from "./firestore.js";
 
 const loginForm = document.getElementById("loginForm");
 const loginError = document.getElementById("loginError");
@@ -15,7 +16,8 @@ loginForm.addEventListener("submit", async (e) => {
     console.log("Intentando iniciar sesión con:", email);
 
     try {
-        await signInWithEmailAndPassword(auth, email, password);
+        const credentials = await signInWithEmailAndPassword(auth, email, password);
+        await ensureUserProfile(credentials.user);
         console.log("Login correcto");
         window.location.href = "index.html";
     } catch (error) {

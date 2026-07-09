@@ -4,6 +4,7 @@ import {
     createTask,
     getComments,
     getAllTasks,
+    getAssignableUsers,
     getTimeline,
     updateTask
 } from "../../auth/firestore.js";
@@ -25,6 +26,27 @@ export async function loadPlanningTasks() {
         return tasks.filter(task => task.module === "planning" && !task.deleted);
     } catch (error) {
         console.error("[Planning][Firestore] Error cargando tareas desde Firestore", error);
+        throw error;
+    }
+
+}
+
+export async function loadPlanningResponsibleUsers() {
+
+    try {
+        const users = await withPlanningFirestoreTimeout(
+            getAssignableUsers(),
+            "Timeout cargando responsables asignables de Planificación"
+        );
+
+        return users
+            .filter(user => user.name)
+            .map(user => ({
+                uid: user.uid,
+                name: user.name
+            }));
+    } catch (error) {
+        console.warn("[Planning][Firestore] No se pudieron cargar responsables asignables. Se usará la lista fija de respaldo.", error);
         throw error;
     }
 
@@ -338,6 +360,7 @@ function withPlanningFirestoreTimeout(operation, message) {
 }
 
 window.loadPlanningTasks = loadPlanningTasks;
+window.loadPlanningResponsibleUsers = loadPlanningResponsibleUsers;
 window.savePlanningTask = savePlanningTask;
 window.updatePlanningTaskData = updatePlanningTaskData;
 window.loadPlanningTaskComments = loadPlanningTaskComments;
