@@ -1,5 +1,7 @@
 function generarChecklist(ot) {
+
     const checklistPorEtapa = {
+
         ENGINEERING_REVIEW: [
             "Plano firmado",
             "BOM validada",
@@ -46,12 +48,43 @@ function generarChecklist(ot) {
             "Producto en Stock SAP",
             "Production Order cerrada"
         ]
+
     };
 
     const items = checklistPorEtapa[ot.etapa] || [];
 
-    return items.map(item => ({
+    return items.map((item, index) => ({
+
+        id: `${ot.productionOrder}-${ot.etapa}-${index + 1}`,
+
         label: item,
-        completed: false
+
+        completed: false,
+
+        completedBy: "",
+
+        completedDate: "",
+
+        comments: ""
+
     }));
+
+}
+
+function porcentajeChecklist(checklist) {
+
+    if (!checklist || checklist.length === 0) return 0;
+
+    const completados = checklist.filter(item => item.completed).length;
+
+    return Math.round((completados / checklist.length) * 100);
+
+}
+
+function checklistCompleto(checklist) {
+
+    if (!checklist || checklist.length === 0) return false;
+
+    return checklist.every(item => item.completed);
+
 }

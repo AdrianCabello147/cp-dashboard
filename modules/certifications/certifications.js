@@ -1,4 +1,4 @@
-const SHEET_ID = "1AMM7oRC82gH9SDEQqtZj0mWWBRQT-_j0cIRxpLEEwbM";
+const SHEET_ID = "1JXb_hDVffwIROxcKmDm6hekccwR50MN9TnVZ-fDRzwM";
 const SHEET_NAME = "CP";
 
 const url = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:json&sheet=${SHEET_NAME}`;
@@ -297,36 +297,3 @@ function toggleDetalle(boton) {
     boton.textContent = "▼ Ver certificaciones";
   }
 }
-
-function activarTabsModulos() {
-  const tabs = document.querySelectorAll(".module-tab");
-  const certificacionesModule = document.getElementById("certificacionesModule");
-  const produccionModule = document.getElementById("produccionModule");
-  const pageTitle = document.getElementById("pageTitle");
-  const pageSubtitle = document.getElementById("pageSubtitle");
-
-  tabs.forEach(tab => {
-    tab.addEventListener("click", () => {
-      tabs.forEach(item => item.classList.remove("active"));
-      tab.classList.add("active");
-
-      const modulo = tab.dataset.module;
-
-      if (modulo === "produccion") {
-        certificacionesModule.classList.remove("active");
-        produccionModule.classList.add("active");
-
-        pageTitle.textContent = "Producción";
-        pageSubtitle.textContent = "Asistente de producción para OT abiertas, acciones, materiales y riesgos PSI.";
-      } else {
-        produccionModule.classList.remove("active");
-        certificacionesModule.classList.add("active");
-
-        pageTitle.textContent = "Dashboard Certificaciones PSI";
-        pageSubtitle.textContent = "Seguimiento automático de certificaciones y fechas de renovación del equipo.";
-      }
-    });
-  });
-}
-
-activarTabsModulos();

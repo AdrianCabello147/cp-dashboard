@@ -5,7 +5,6 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>PSI Operations Platform</title>
-
     <link rel="stylesheet" href="style.css?v=1.2">
 </head>
 
@@ -22,127 +21,72 @@
             <div class="header-info">
                 <h1 id="pageTitle">
                     PSI Operations Platform
-                    <span class="version-tag">BETA v1.0</span>
                 </h1>
-                <p id="pageSubtitle">Seguimiento automático de certificaciones, producción y gestión PSI.</p>
+                <p id="pageSubtitle">
+                    Seguimiento automático de certificaciones, planificación y gestión PSI.
+                </p>
             </div>
 
             <button id="logoutBtn" class="logout-btn">Cerrar sesión</button>
         </header>
 
         <nav class="module-tabs">
-            <button class="module-tab active" data-module="certificaciones">Certificaciones</button>
-            <button class="module-tab" data-module="produccion">Producción</button>
+            <button class="module-tab active" data-module="certificaciones">
+                Certificaciones
+            </button>
+
+            <button class="module-tab" data-module="planificacion">
+                Planificación
+            </button>
         </nav>
 
+        <!-- CERTIFICACIONES -->
         <section id="certificacionesModule" class="module-section active">
+
             <section id="resumen" class="resumen"></section>
 
             <section class="buscador">
-                <input type="text" id="busqueda" placeholder="Buscar por persona, CP o descripción...">
+                <input
+                    type="text"
+                    id="busqueda"
+                    placeholder="Buscar por persona, CP o descripción..."
+                >
             </section>
 
             <section id="personas" class="personas">
                 <p>Cargando datos...</p>
             </section>
-        </section>
-
-        <section id="produccionModule" class="module-section">
-
-            <section class="production-hero">
-                <div>
-                    <h2>Producción</h2>
-                    <p>Estado general de Production Orders PSI, próximas acciones y riesgos operativos.</p>
-                </div>
-            </section>
-
-            <section class="production-cards">
-                <article class="production-card">
-                    <span>OT abiertas</span>
-                    <strong id="totalOT">0</strong>
-                </article>
-
-                <article class="production-card">
-                    <span>Atención hoy</span>
-                    <strong id="accionesHoy">0</strong>
-                </article>
-
-                <article class="production-card">
-                    <span>En riesgo</span>
-                    <strong id="otRiesgo">0</strong>
-                </article>
-
-                <article class="production-card">
-                    <span>Listas para ensamblar</span>
-                    <strong id="otListas">0</strong>
-                </article>
-            </section>
-
-            <section class="control-center">
-                <div class="section-title">
-                    <h3>🧭 PSI Control Center</h3>
-                    <p>Resumen ejecutivo para gestión diaria de producción.</p>
-                </div>
-
-                <div id="controlCenterContent" class="control-center-grid"></div>
-            </section>
-
-            <section class="work-agenda">
-                <div class="section-title">
-                    <h3>🔥 Agenda de hoy</h3>
-                    <p>Actividades sugeridas por el Asistente de Producción.</p>
-                </div>
-
-                <div class="agenda-list" id="agendaList"></div>
-            </section>
-
-            <section class="production-table-section">
-                <div class="section-title">
-                    <h3>Production Orders abiertas</h3>
-                    <p>Vista principal del Asistente de Producción PSI.</p>
-                </div>
-
-                <div class="production-table-wrapper">
-                    <table class="production-table">
-                        <thead>
-                            <tr>
-                                <th>Atención</th>
-                                <th>OT</th>
-                                <th>Cliente</th>
-                                <th>Proyecto</th>
-                                <th>Etapa</th>
-                                <th>Due Date</th>
-                                <th>Estado</th>
-                                <th>Bloqueador</th>
-                                <th>Próxima acción</th>
-                                <th>Responsable</th>
-                            </tr>
-                        </thead>
-
-                        <tbody id="productionTableBody"></tbody>
-                    </table>
-                </div>
-            </section>
 
         </section>
+
+        <!-- PLANIFICACIÓN -->
+        <section id="planificacionModule" class="module-section"></section>
+
+        <!-- MÓDULOS OCULTOS -->
+        <section id="produccionModule" class="module-section"></section>
+        <section id="cotizacionesModule" class="module-section"></section>
+        <section id="historialModule" class="module-section"></section>
+        <section id="parametrosModule" class="module-section"></section>
 
     </main>
 
-    <script type="module" src="auth.js"></script>
-    <script src="script.js"></script>
+    <!-- AUTENTICACIÓN -->
+    <script type="module" src="auth/auth.js"></script>
 
-    <script src="production-stages.js"></script>
-    <script src="production-workflow.js"></script>
-    <script src="production-rules.js"></script>
-    <script src="production-tasks.js"></script>
-    <script src="production-alerts.js"></script>
-    <script src="production-checklists.js"></script>
-    <script src="production-kpi.js"></script>
-    <script src="production-users.js"></script>
-    <script src="production-agenda.js"></script>
-    <script src="production-engine.js"></script>
-    <script src="production-ui.js"></script>
-    <script src="production.js"></script>
+    <!-- COMPARTIDOS -->
+    <script src="shared/utils.js"></script>
+    <script src="shared/app.js"></script>
+
+    <!-- CERTIFICACIONES -->
+    <script src="modules/certifications/certifications.js"></script>
+
+    <!-- PLANIFICACIÓN -->
+    <script src="modules/planning/planning-engine.js"></script>
+    <script src="modules/planning/planning-ui.js"></script>
+    <script src="modules/planning/planning.js"></script>
+
+    <!-- FIRESTORE -->
+    <script type="module" src="auth/firestore.js"></script>
 
 </body>
 

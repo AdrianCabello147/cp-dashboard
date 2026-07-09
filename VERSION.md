@@ -2,7 +2,6 @@
 
 ## Version
 
-BETA v1.0
 
 Fecha:
 Julio 2026

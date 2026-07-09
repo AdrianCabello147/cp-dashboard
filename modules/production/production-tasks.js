@@ -5,10 +5,16 @@ function generarTareas(ot) {
         const stage = PRODUCTION_STAGES[ot.etapa];
 
         tasks.push({
-            id: ot.etapa,
+            id: `${ot.productionOrder}-${ot.etapa}`,
+            code: ot.productionOrder,
+            module: "production",
+            type: ot.etapa,
             title: stage.action,
             responsible: stage.responsible,
+            owner: ot.owner || "",
+            participants: ot.participants || "",
             dueDate: calcularFechaObjetivoTarea(ot, ot.etapa),
+            status: "Disponible",
             completed: false
         });
     }
@@ -18,22 +24,12 @@ function generarTareas(ot) {
 
 function calcularFechaObjetivoTarea(ot, etapa) {
     if (etapa === "SUPPORTS") {
-        return calcularFechaMasDias(ot.creationDate, 2);
+        return addDays(ot.creationDate, 2);
     }
 
     if (etapa === "ENGINEERING_REVIEW") {
-        return calcularFechaMasDias(ot.creationDate, 1);
+        return addDays(ot.creationDate, 1);
     }
 
     return ot.dueDate || "";
-}
-
-function calcularFechaMasDias(fechaTexto, dias) {
-    const fecha = convertirFecha(fechaTexto);
-
-    if (!fecha) return "";
-
-    fecha.setDate(fecha.getDate() + dias);
-
-    return fecha.toLocaleDateString("es-CL");
 }
