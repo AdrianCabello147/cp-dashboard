@@ -65,6 +65,11 @@ async function executePlanningTaskAction(taskId, action) {
 }
 
 async function duplicatePlanningTaskAction(taskId) {
+    if (!canCurrentUserModifyPlanningTasks()) {
+        console.warn("Acción no permitida");
+        return;
+    }
+
     const sourceTask = getPlanningTasks().find(task => task.id === taskId);
 
     if (!sourceTask) return;
@@ -81,7 +86,16 @@ async function duplicatePlanningTaskAction(taskId) {
     }
 }
 
+async function duplicatePlanningTask(taskId) {
+    return duplicatePlanningTaskAction(taskId);
+}
+
 async function deletePlanningTaskAction(taskId) {
+    if (!canCurrentUserModifyPlanningTasks()) {
+        console.warn("Acción no permitida");
+        return;
+    }
+
     const task = getPlanningTasks().find(item => item.id === taskId);
 
     if (!task) return;
@@ -101,6 +115,10 @@ async function deletePlanningTaskAction(taskId) {
     } catch (error) {
         console.error("No se pudo eliminar la tarea de Planificación.", error);
     }
+}
+
+async function deletePlanningTask(taskId) {
+    return deletePlanningTaskAction(taskId);
 }
 
 function addPlanningTaskCommentLocal(taskId, text) {
@@ -163,3 +181,4 @@ async function persistPlanningTimelineEvent(taskId, event) {
 }
 
 document.addEventListener("DOMContentLoaded", initPlanning);
+document.addEventListener("user-profile-loaded", refreshPlanningBoard);

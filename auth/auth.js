@@ -4,9 +4,14 @@ import { ensureUserProfile } from "./firestore.js";
 
 onAuthStateChanged(auth, async (user) => {
     if (user) {
-        await ensureUserProfile(user);
+        const userProfile = await ensureUserProfile(user);
+        window.currentUserProfile = userProfile;
+        document.dispatchEvent(new CustomEvent("user-profile-loaded", {
+            detail: userProfile
+        }));
         document.body.style.display = "block";
     } else {
+        window.currentUserProfile = null;
         window.location.href = "login.html";
     }
 });

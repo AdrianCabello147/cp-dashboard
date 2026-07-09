@@ -464,7 +464,7 @@ function renderPlanningCard(task) {
   return `
       <div
         class="task-card ${priorityClass} ${getPlanningCardStatusClass(task.estado)}"
-        onclick="editPlanningTask('${task.id}')"
+        ${renderPlanningEditCardAction(task)}
         >
 
       <div class="task-card-header">
@@ -489,20 +489,12 @@ function renderPlanningCard(task) {
       </div>
 
       <div class="task-secondary-actions">
-        <button type="button" class="task-action-btn" onclick="editPlanningTask('${task.id}', event)">
-          Editar
-        </button>
+        ${renderPlanningAdminActions(task)}
         <button type="button" class="task-action-btn" onclick="openPlanningComments('${task.id}', event)">
           Comentarios (${getPlanningCommentsCount(task)})
         </button>
         <button type="button" class="task-action-btn" onclick="openPlanningTimeline('${task.id}', event)">
           Timeline
-        </button>
-        <button type="button" class="task-action-btn" onclick="handlePlanningDuplicateTask('${task.id}', event)">
-          Duplicar
-        </button>
-        <button type="button" class="task-action-btn" onclick="handlePlanningDeleteTask('${task.id}', event)">
-          Eliminar
         </button>
       </div>
 
@@ -520,6 +512,40 @@ function renderPlanningCard(task) {
       </div>
     </div>
   `;
+}
+
+function renderPlanningEditCardAction(task) {
+  if (!canCurrentUserModifyPlanningTasks()) {
+    return "";
+  }
+
+  return `onclick="editPlanningTask('${task.id}')"`;
+}
+
+function renderPlanningAdminActions(task) {
+  if (!canCurrentUserModifyPlanningTasks()) {
+    return "";
+  }
+
+  return `
+        <button type="button" class="task-action-btn" onclick="editPlanningTask('${task.id}', event)">
+          Editar
+        </button>
+        <button type="button" class="task-action-btn" onclick="handlePlanningDuplicateTask('${task.id}', event)">
+          Duplicar
+        </button>
+        <button type="button" class="task-action-btn" onclick="handlePlanningDeleteTask('${task.id}', event)">
+          Eliminar
+        </button>
+  `;
+}
+
+function canCurrentUserModifyPlanningTasks() {
+  return window.currentUserProfile?.role === "admin";
+}
+
+function canCurrentUserDeletePlanningTasks() {
+  return canCurrentUserModifyPlanningTasks();
 }
 
 function renderPlanningCommentsModal() {
@@ -797,6 +823,11 @@ function editPlanningTask(taskId, event) {
 
     if (event) {
         event.stopPropagation();
+    }
+
+    if (!canCurrentUserModifyPlanningTasks()) {
+        console.warn("Acción no permitida");
+        return;
     }
 
     const task = getPlanningTasks().find(t => t.id === taskId);
