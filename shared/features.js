@@ -1,5 +1,5 @@
 export const FEATURES = {
   certifications: true,
   planning: true,
-  production: false
+  production: true
 };

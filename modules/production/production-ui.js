@@ -1,155 +1,16 @@
-function renderProductionModule(orders) {
-  const container = document.getElementById("produccionModule");
+function productionContainer() { return document.getElementById("produccionModule"); }
+function renderProductionLoading() { const container = productionContainer(); if (container) container.innerHTML = `<section class="planning-weekly"><p>Cargando órdenes abiertas y materiales…</p></section>`; }
+function renderProductionRestricted() { const container = productionContainer(); if (container) container.innerHTML = `<section class="planning-weekly"><div class="comments-empty">Acceso restringido</div></section>`; }
+function renderProductionError(error) { const container = productionContainer(); if (!container) return; const code = error?.code || ""; const message = code.includes("permission-denied") ? "No tienes permisos para consultar Producción." : code.includes("unavailable") ? "Error de red al consultar Firestore." : "No fue posible cargar Producción."; container.innerHTML = `<section class="planning-weekly"><div class="comments-empty"><p>${escapeProductionHtml(message)}</p><button class="task-action-btn" onclick="loadProductionPage()">Reintentar</button></div></section>`; }
 
-  if (!container) return;
-
-  const kpis = calculateProductionKPIs(orders);
-  const groupedOrders = groupProductionOrdersByStatus(orders);
-  const statuses = Object.keys(groupedOrders);
-
-  container.innerHTML = `
-    <section class="planning-hero">
-      <div>
-        <h2>Producción</h2>
-        <p>Control local de órdenes de trabajo PSI por estado de fabricación.</p>
-      </div>
-    </section>
-
-    ${renderProductionKPIs(kpis)}
-
-    <section class="planning-weekly">
-      <div class="planning-weekly-header">
-        <div>
-          <h3>Tablero de Producción</h3>
-          <p>Órdenes agrupadas por estado operacional.</p>
-        </div>
-        <span>${orders.length} OT</span>
-      </div>
-
-      ${renderProductionAccordionControls(statuses)}
-      ${renderProductionBoard(groupedOrders)}
-    </section>
-  `;
+function renderProductionModule() {
+  const container = productionContainer(); if (!container || !PRODUCTION_PAGE) return;
+  const orders = PRODUCTION_PAGE.orders;
+  const kpis = calculateProductionKPIs(orders, PRODUCTION_KPIS?.total);
+  container.innerHTML = `<section class="planning-hero"><div><h2>Producción</h2><p>OT abiertas esperando fabricación y disponibilidad de materiales.</p></div></section>${renderProductionKPIs(kpis)}<section class="planning-weekly"><div class="planning-weekly-header"><div><h3>OT abiertas</h3><p>Materiales calculados para esta página de hasta 25 OT.</p></div><span>${orders.length} OT</span></div>${orders.length ? renderProductionTable(orders) : `<div class="comments-empty">No hay OT abiertas para mostrar.</div>`}${renderProductionPagination()}</section>`;
 }
-
-function renderProductionKPIs(kpis) {
-  const items = [
-    ["Total OT", kpis.total],
-    ["Pendiente revisión", kpis.pendingReview],
-    ["Materiales pendientes", kpis.waitingMaterials],
-    ["En fabricación", kpis.inFabrication],
-    ["En prueba", kpis.inTest],
-    ["Atrasadas", kpis.overdue],
-    ["Entregadas", kpis.delivered]
-  ];
-
-  return `
-    <section class="planning-kpis">
-      ${items.map(([label, value]) => `
-        <article class="planning-kpi-card">
-          <span>${label}</span>
-          <strong>${value}</strong>
-        </article>
-      `).join("")}
-    </section>
-  `;
-}
-
-function renderProductionAccordionControls(statuses) {
-  const escapedStatuses = statuses.map(escapeProductionAttribute);
-
-  return `
-    <div class="planning-accordion-controls">
-      <button type="button" class="task-action-btn" onclick="setProductionSectionsCollapsed([${escapedStatuses.join(",")}], false)">
-        Expandir todo
-      </button>
-      <button type="button" class="task-action-btn" onclick="setProductionSectionsCollapsed([${escapedStatuses.join(",")}], true)">
-        Contraer todo
-      </button>
-    </div>
-  `;
-}
-
-function renderProductionBoard(groupedOrders) {
-  return `
-    <section class="planning-board">
-      ${Object.entries(groupedOrders).map(([status, orders]) => renderProductionColumn(status, orders)).join("")}
-    </section>
-  `;
-}
-
-function renderProductionColumn(status, orders) {
-  const collapsed = isProductionSectionCollapsed(status);
-
-  return `
-    <article class="planning-column ${collapsed ? "is-collapsed" : ""}">
-      <button type="button" class="planning-column-header planning-accordion-header" onclick="toggleProductionSection('${escapeProductionHtml(status)}')">
-        <h3>
-          <span class="planning-accordion-arrow">▼</span>
-          ${escapeProductionHtml(status)}
-        </h3>
-        <span>${orders.length} OT</span>
-      </button>
-
-      <div class="planning-accordion-content">
-        ${
-          orders.length === 0
-            ? `<div class="comments-empty">Sin órdenes en este estado.</div>`
-            : orders.map(renderProductionCard).join("")
-        }
-      </div>
-    </article>
-  `;
-}
-
-function renderProductionCard(order) {
-  const overdueClass = isProductionOrderOverdue(order) ? "task-card-paused" : "";
-
-  return `
-    <article class="task-card ${getProductionPriorityClass(order.priority)} ${overdueClass}">
-      <div class="task-card-header">
-        <div class="task-title-block">
-          <strong>${escapeProductionHtml(order.productionOrder)}</strong>
-          <p>${escapeProductionHtml(order.psiCode)}</p>
-        </div>
-        <span class="task-priority ${getProductionPriorityClass(order.priority)}">
-          ${escapeProductionHtml(order.priority)}
-        </span>
-      </div>
-
-      <div class="task-context">
-        <span>${escapeProductionHtml(order.customer)}</span>
-        <span>${escapeProductionHtml(order.description)}</span>
-      </div>
-
-      <div class="task-meta">
-        <span>Cantidad: ${escapeProductionHtml(order.quantity)}</span>
-        <span>Responsable: ${escapeProductionHtml(order.responsible)}</span>
-        <span>Target Day: ${escapeProductionHtml(order.targetDate)}</span>
-      </div>
-    </article>
-  `;
-}
-
-function getProductionPriorityClass(priority) {
-  const normalized = (priority || "").toLowerCase();
-
-  if (normalized === "alta") return "priority-high";
-  if (normalized === "media") return "priority-medium";
-  if (normalized === "baja") return "priority-low";
-
-  return "priority-normal";
-}
-
-function escapeProductionHtml(value) {
-  return (value ?? "").toString()
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&#039;");
-}
-
-function escapeProductionAttribute(value) {
-  return `'${escapeProductionHtml(value)}'`;
-}
+function renderProductionKPIs(kpis) { const items = [["OT abiertas", kpis.totalOpen], ["Listas para fabricar", kpis.ready], ["Esperando materiales", kpis.waitingMaterials], ["Componentes pendientes", kpis.pendingComponents], ["Componentes sin stock", kpis.noStockComponents]]; return `<section class="planning-kpis">${items.map(([label, value]) => `<article class="planning-kpi-card"><span>${label}</span><strong>${value}</strong></article>`).join("")}</section>`; }
+function renderProductionTable(orders) { return `<div class="production-table-wrap"><table class="production-table"><thead><tr><th>Production Order</th><th>Cliente</th><th>Producto</th><th>Estado</th><th>Fecha compromiso</th><th>Días restantes</th><th>OTD</th><th>Total comp.</th><th>Pendientes</th><th>Sin stock</th><th>Próxima llegada</th></tr></thead><tbody>${orders.map(order => `<tr class="production-order-row" tabindex="0" onclick="toggleProductionComponents('${escapeProductionHtml(order.id)}')" onkeydown="if(event.key === 'Enter') toggleProductionComponents('${escapeProductionHtml(order.id)}')"><td>${escapeProductionHtml(order.productionOrder)}</td><td>${escapeProductionHtml(order.customer)}</td><td>${escapeProductionHtml(order.product)}</td><td>${escapeProductionHtml(order.status)}</td><td>${formatProductionDate(order.salesOrderCommitmentDate)}</td><td>${escapeProductionHtml(productionDaysRemaining(order.salesOrderCommitmentDate))}</td><td><span class="task-priority production-light-${order.trafficLight.toLowerCase()}">${escapeProductionHtml(order.trafficLight)}</span></td><td>${order.totalComponents}</td><td>${order.pendingComponents}</td><td>${order.noStockComponents}</td><td>${formatProductionDate(order.nextArrival)}</td></tr><tr id="production-components-${escapeProductionHtml(order.id)}" class="production-components-row" hidden><td colspan="11">${renderProductionComponents(order.components)}</td></tr>`).join("")}</tbody></table></div>`; }
+function renderProductionComponents(components) { if (!components.length) return `<div class="comments-empty">Sin componentes informados.</div>`; return `<table class="production-components-table"><thead><tr><th>Código SAP</th><th>Descripción</th><th>Cantidad requerida</th><th>Cantidad disponible</th><th>Estado</th><th>Fecha llegada taller</th></tr></thead><tbody>${components.map(component => `<tr><td>${escapeProductionHtml(component.code)}</td><td>${escapeProductionHtml(component.description)}</td><td>${escapeProductionHtml(component.required)}</td><td>${escapeProductionHtml(component.available)}</td><td>${escapeProductionHtml(component.status)}</td><td>${formatProductionDate(component.arrivalDate)}</td></tr>`).join("")}</tbody></table>`; }
+function toggleProductionComponents(id) { const row = document.getElementById(`production-components-${id}`); if (row) row.hidden = !row.hidden; }
+function renderProductionPagination() { return `<div class="production-pagination"><button class="task-action-btn" ${!PRODUCTION_PAGE.hasPrevious ? "disabled" : ""} onclick="loadProductionPage(PRODUCTION_PAGE.first, 'previous')">Anterior</button><span>Hasta 25 OT por página</span><button class="task-action-btn" ${!PRODUCTION_PAGE.hasNext ? "disabled" : ""} onclick="loadProductionPage(PRODUCTION_PAGE.last, 'next')">Siguiente</button></div>`; }

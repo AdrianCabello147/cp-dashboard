@@ -1,6 +1,14 @@
-import { FEATURES } from "./features.js?v=2026-07-09-planning-v1";
+import { FEATURES } from "./features.js?v=2026-07-12-production-mvp-v1";
 
-const APP_VERSION = window.APP_VERSION || "2026-07-09-planning-v1";
+const APP_VERSION = window.APP_VERSION || "2026-07-12-production-mvp-v1";
+const PRODUCTION_ALLOWED_USERS = ["acabello@alte.cl"];
+
+function isProductionUserAllowed() {
+  const email = window.currentUserProfile?.email?.trim().toLowerCase();
+  return Boolean(email && PRODUCTION_ALLOWED_USERS.includes(email));
+}
+
+window.isProductionUserAllowed = isProductionUserAllowed;
 
 const APP_MODULES = {
   certificaciones: {
@@ -41,7 +49,8 @@ function actualizarHeader(titulo, subtitulo) {
 }
 
 function isFeatureEnabled(moduleConfig) {
-  return FEATURES[moduleConfig.feature] === true;
+  return FEATURES[moduleConfig.feature] === true
+    && (moduleConfig.feature !== "production" || isProductionUserAllowed());
 }
 
 function getEnabledModuleEntries() {
@@ -102,7 +111,11 @@ function getVersionedLocalAsset(src) {
 async function activateModule(moduleName) {
   const config = APP_MODULES[moduleName];
 
-  if (!config || !isFeatureEnabled(config)) return;
+  if (!config) return;
+  if (!isFeatureEnabled(config)) {
+    if (moduleName === "produccion") renderProductionRestricted();
+    return;
+  }
 
   await loadModuleScripts(config);
 
@@ -124,6 +137,15 @@ async function activateModule(moduleName) {
   localStorage.setItem("activeModule", moduleName);
 }
 
+function renderProductionRestricted() {
+  const container = document.getElementById("produccionModule");
+  if (container) {
+    document.querySelectorAll(".module-section").forEach(section => section.classList.remove("active"));
+    container.classList.add("active");
+    container.innerHTML = `<section class="planning-weekly"><div class="comments-empty">Acceso restringido</div></section>`;
+  }
+}
+
 function getInitialModule() {
   const savedModule = localStorage.getItem("activeModule");
   const enabledModules = getEnabledModuleEntries().map(([moduleName]) => moduleName);
@@ -136,6 +158,14 @@ function getInitialModule() {
 }
 
 function initAppNavigation() {
+  if (window.location.pathname.startsWith("/production/")) {
+    if (!isProductionUserAllowed()) {
+      renderProductionRestricted();
+      return;
+    }
+    activateModule("produccion");
+    return;
+  }
   renderModuleTabs();
 
   const tabs = document.querySelectorAll(".module-tab");
@@ -150,3 +180,4 @@ function initAppNavigation() {
 }
 
 document.addEventListener("DOMContentLoaded", initAppNavigation);
+document.addEventListener("user-profile-loaded", initAppNavigation);

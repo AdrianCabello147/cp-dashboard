@@ -2123,3 +2123,23 @@ body{
 .task-secondary-actions .task-action-btn:hover {
     background: #eef2f6;
 }
+/* Production list: reuses portal cards/buttons while keeping wide operational data scrollable. */
+.production-filters { display: grid; grid-template-columns: repeat(5, minmax(145px, 1fr)); gap: 12px; margin: 18px 0; }
+.production-filter { display: flex; flex-direction: column; gap: 6px; font-size: 13px; font-weight: 600; color: #40566b; }
+.production-filter input, .production-filter select { width: 100%; min-height: 36px; border: 1px solid #d7e0e8; border-radius: 6px; padding: 7px 9px; background: #fff; color: #26384a; }
+.production-table-wrap { overflow-x: auto; border: 1px solid #e0e7ee; border-radius: 8px; background: #fff; }
+.production-table { border-collapse: collapse; width: 100%; min-width: 1500px; font-size: 13px; }
+.production-table th, .production-table td { padding: 10px 12px; text-align: left; border-bottom: 1px solid #edf1f5; vertical-align: top; }
+.production-table th { background: #f4f7fa; color: #40566b; white-space: nowrap; }
+.production-order-row { cursor: pointer; }
+.production-order-row:hover, .production-order-row:focus { background: #eff7fc; outline: none; }
+.production-pagination { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-top: 18px; }
+.production-components-row > td { padding: 14px; background: #f8fafc; }
+.production-components-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+.production-components-table th, .production-components-table td { padding: 8px; text-align: left; border-bottom: 1px solid #e4ebf1; }
+.production-light-verde { background: #d9f4df; color: #176335; }
+.production-light-amarillo { background: #fff1c7; color: #805900; }
+.production-light-rojo { background: #fce0e0; color: #a12b2b; }
+.production-light-gris { background: #e5e9ee; color: #4c5967; }
+@media (max-width: 900px) { .production-filters { grid-template-columns: repeat(2, minmax(145px, 1fr)); } }
+@media (max-width: 520px) { .production-filters { grid-template-columns: 1fr; } .production-pagination { font-size: 12px; } }
