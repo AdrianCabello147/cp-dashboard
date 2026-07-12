@@ -5,7 +5,11 @@ async function initProductionModule() { if (!window.isProductionUserAllowed?.())
 
 async function loadProductionPage(cursor = null, direction = "next") {
   renderProductionLoading();
-  try { [PRODUCTION_PAGE, PRODUCTION_KPIS] = await Promise.all([getProductionOrdersPage(cursor, direction), getProductionKPIs()]); renderProductionModule(); }
+  try {
+    PRODUCTION_PAGE = await getProductionOrdersPage(cursor, direction);
+    PRODUCTION_KPIS = { total: PRODUCTION_PAGE.orders.length };
+    renderProductionModule();
+  }
   catch (error) { console.error("Error al cargar Produccion.", error); renderProductionError(error); }
 }
 
