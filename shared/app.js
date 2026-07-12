@@ -1,11 +1,13 @@
-import { FEATURES } from "./features.js?v=2026-07-12-production-mvp-v1";
+import { FEATURES } from "./features.js?v=2026-07-12-production-admin-access-v1";
 
-const APP_VERSION = window.APP_VERSION || "2026-07-12-production-mvp-v1";
+const APP_VERSION = window.APP_VERSION || "2026-07-12-production-admin-access-v1";
 const PRODUCTION_ALLOWED_USERS = ["acabello@alte.cl"];
 
 function isProductionUserAllowed() {
   const email = window.currentUserProfile?.email?.trim().toLowerCase();
-  return Boolean(email && PRODUCTION_ALLOWED_USERS.includes(email));
+  const role = window.currentUserProfile?.role;
+
+  return role === "admin" || Boolean(email && PRODUCTION_ALLOWED_USERS.includes(email));
 }
 
 window.isProductionUserAllowed = isProductionUserAllowed;

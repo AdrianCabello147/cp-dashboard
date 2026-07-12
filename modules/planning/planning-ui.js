@@ -17,6 +17,60 @@ const PLANNING_COMPLETED_SUMMARY_STATE = {
   selectedWeek: ""
 };
 
+const PLANNING_OTHER_ACTIVITY = "Otro...";
+
+const PLANNING_ACTIVITY_GROUPS = [
+  {
+    label: "INGENIERÍA",
+    activities: [
+      "Revisión plano",
+      "Actualización plano",
+      "Revisión BOM",
+      "Actualización BOM",
+      "Documentación"
+    ]
+  },
+  {
+    label: "TALLER",
+    activities: [
+      "Pre-ensamble",
+      "Ensamble",
+      "Terminar ensamble",
+      "Pruebas",
+      "Reparación",
+      "Limpieza cilindros",
+      "Grabado",
+      "Inspección final"
+    ]
+  },
+  {
+    label: "COMPRAS / LOGÍSTICA",
+    activities: [
+      "Compra OT",
+      "Compra Taller",
+      "Seguimiento proveedor",
+      "Recepción materiales",
+      "Picking"
+    ]
+  },
+  {
+    label: "GESTIÓN",
+    activities: [
+      "Cotización",
+      "Visita terreno",
+      "Reunión técnica",
+      "Capacitación",
+      "Administrativo"
+    ]
+  },
+  {
+    label: "OTROS",
+    activities: [
+      PLANNING_OTHER_ACTIVITY
+    ]
+  }
+];
+
 function renderPlanningModule(tasks) {
   const container = document.getElementById("planificacionModule");
 
@@ -869,19 +923,22 @@ function renderNewTaskModal() {
 
           <div class="form-grid">
             <label>
-              ID Planning
-              <input name="planningCode" type="text" placeholder="Se genera al guardar" readonly>
-            </label>
-
-            <label>
               Actividad
-              <input name="actividad" type="text" placeholder="Ej: Ensamble, Pruebas, Documentación" required>
+              <select name="actividadCatalog" onchange="handlePlanningActivityChange()" required>
+                <option value="" disabled selected>Seleccionar</option>
+                ${renderPlanningActivityOptions()}
+              </select>
+            </label>
+
+            <label id="planningCustomActivityField" hidden>
+              Especificar actividad
+              <input name="actividadCustom" type="text" placeholder="Describe la actividad">
             </label>
 
             <label>
-              OT / PSI
+              OT / PSI / OTRO
               <div class="ot-search-row">
-                <input name="otPsi" type="text" placeholder="Ej: OT 12045 o PSI-26-0018">
+                <input name="otPsi" type="text" placeholder="Ej: OT 12045 / PSI-26-0018 / Mantención taller / Capacitación / Visita cliente">
                 <button type="button" class="secondary-btn ot-search-btn" onclick="handlePlanningOTSearch()">
                   Buscar OT
                 </button>
@@ -891,11 +948,6 @@ function renderNewTaskModal() {
             <label>
               Cliente
               <input name="cliente" type="text" placeholder="Cliente">
-            </label>
-
-            <label>
-              Proyecto
-              <input name="proyecto" type="text" placeholder="Proyecto">
             </label>
 
             <label>
@@ -923,8 +975,7 @@ function renderNewTaskModal() {
             <label>
               Estado
               <select name="estado">
-                <option value="" disabled selected>Seleccionar</option>
-                <option>Pendiente</option>
+                <option selected>Pendiente</option>
                 <option>En proceso</option>
                 <option>Pausada</option>
                 <option>Terminado</option>
@@ -996,6 +1047,73 @@ function renderNewTaskModal() {
   `;
 }
 
+function renderPlanningActivityOptions() {
+  return PLANNING_ACTIVITY_GROUPS.map(group => `
+                <optgroup label="${escapePlanningAttribute(group.label)}">
+                  ${group.activities.map(activity => `
+                    <option value="${escapePlanningAttribute(activity)}">${escapePlanningHtml(activity)}</option>
+                  `).join("")}
+                </optgroup>
+  `).join("");
+}
+
+function getPlanningCatalogActivities() {
+  return PLANNING_ACTIVITY_GROUPS.flatMap(group => group.activities);
+}
+
+function isPlanningCatalogActivity(activity) {
+  return getPlanningCatalogActivities().includes(activity);
+}
+
+function getPlanningFormActivityValue(form, formData = null) {
+  const data = formData || new FormData(form);
+  const selectedActivity = data.get("actividadCatalog") || "";
+
+  if (selectedActivity === PLANNING_OTHER_ACTIVITY) {
+    return (data.get("actividadCustom") || "").trim();
+  }
+
+  return selectedActivity;
+}
+
+function setPlanningActivityFormValue(form, activity) {
+  const value = activity || "";
+
+  if (!form.elements.actividadCatalog || !form.elements.actividadCustom) {
+    return;
+  }
+
+  if (!value) {
+    form.elements.actividadCatalog.value = "";
+    form.elements.actividadCustom.value = "";
+  } else if (isPlanningCatalogActivity(value)) {
+    form.elements.actividadCatalog.value = value;
+    form.elements.actividadCustom.value = "";
+  } else {
+    form.elements.actividadCatalog.value = PLANNING_OTHER_ACTIVITY;
+    form.elements.actividadCustom.value = value;
+  }
+
+  handlePlanningActivityChange();
+}
+
+function handlePlanningActivityChange() {
+  const form = document.getElementById("newTaskForm");
+  const customField = document.getElementById("planningCustomActivityField");
+
+  if (!form || !customField || !form.elements.actividadCustom) {
+    return;
+  }
+
+  const showCustomActivity = form.elements.actividadCatalog.value === PLANNING_OTHER_ACTIVITY;
+  customField.hidden = !showCustomActivity;
+  form.elements.actividadCustom.required = showCustomActivity;
+
+  if (!showCustomActivity) {
+    form.elements.actividadCustom.value = "";
+  }
+}
+
 async function handleNewTaskSubmit(event) {
 
     event.preventDefault();
@@ -1005,10 +1123,11 @@ async function handleNewTaskSubmit(event) {
     const taskId = formData.get("taskId");
     const submitLabel = taskId ? "Guardar cambios" : "Guardar tarea";
     const responsibleUser = getPlanningSelectedResponsibleUser(form);
+    const actividad = getPlanningFormActivityValue(form, formData);
 
     setPlanningTaskModalError("");
 
-    const validationMessage = validatePlanningTaskForm(form, formData, responsibleUser);
+    const validationMessage = validatePlanningTaskForm(form, formData, responsibleUser, actividad);
 
     if (validationMessage) {
         setPlanningTaskModalError(validationMessage);
@@ -1019,13 +1138,11 @@ async function handleNewTaskSubmit(event) {
 
     const task = {
 
-        actividad: formData.get("actividad") || "",
-        planningCode: formData.get("planningCode") || "",
+        actividad,
         otPsi: formData.get("otPsi") || "",
         psiCode: formData.get("psiCode") || "",
         productionOrder: formData.get("productionOrder") || "",
         cliente: formData.get("cliente") || "",
-        proyecto: formData.get("proyecto") || "",
 
         responsableTaller: responsibleUser.name,
         responsibleUid: responsibleUser.uid,
@@ -1066,9 +1183,13 @@ async function handleNewTaskSubmit(event) {
 
 }
 
-function validatePlanningTaskForm(form, formData, responsibleUser) {
-  if (!formData.get("actividad")) {
-    return "Completa la actividad de la tarea.";
+function validatePlanningTaskForm(form, formData, responsibleUser, actividad) {
+  if (!formData.get("actividadCatalog")) {
+    return "Selecciona una actividad.";
+  }
+
+  if (!actividad) {
+    return "Especifica la actividad.";
   }
 
   if (!responsibleUser.uid || !responsibleUser.name) {
@@ -1102,6 +1223,8 @@ function openNewTaskModal() {
     form.reset();
     form.elements.taskId.value = "";
     form.elements.responsibleUid.innerHTML = renderPlanningResponsibleOptions();
+    form.elements.estado.value = "Pendiente";
+    handlePlanningActivityChange();
   }
 
   setPlanningModalMode("create");
@@ -1120,6 +1243,7 @@ function closeNewTaskModal() {
   if (form) {
     form.reset();
     form.elements.taskId.value = "";
+    handlePlanningActivityChange();
   }
 
   clearPlanningOTInfo();
@@ -1229,13 +1353,11 @@ function setPlanningTaskModalError(message) {
 
 function fillPlanningTaskForm(form, task) {
   form.elements.taskId.value = task.id || "";
-  form.elements.planningCode.value = getPlanningTaskCode(task);
   form.elements.psiCode.value = task.psiCode || task.customSolution || "";
   form.elements.productionOrder.value = task.productionOrder || "";
-  form.elements.actividad.value = task.actividad || "";
+  setPlanningActivityFormValue(form, task.actividad || "");
   form.elements.otPsi.value = task.otPsi || "";
   form.elements.cliente.value = task.cliente || "";
-  form.elements.proyecto.value = task.proyecto || "";
   const responsibleName = getPlanningTaskResponsibleName(task);
   const responsibleUser = getPlanningResponsibleUsers().find(user =>
     user.uid === task.responsibleUid || user.name === responsibleName
@@ -1316,7 +1438,6 @@ function handlePlanningOTSearch() {
   }
 
   form.elements.cliente.value = productionOrder.cliente || "";
-  form.elements.proyecto.value = productionOrder.proyecto || "";
   form.elements.psiCode.value = productionOrder.customSolution || "";
   form.elements.productionOrder.value = productionOrder.productionOrder || "";
   form.elements.fechaObjetivo.value = toDateInputValue(productionOrder.dueDate);
@@ -1352,7 +1473,6 @@ function showPlanningOTInfo(productionOrder) {
     <div>
       <span>OT: ${escapePlanningHtml(productionOrder.productionOrder)}</span>
       <span>Cliente: ${escapePlanningHtml(productionOrder.cliente)}</span>
-      <span>Proyecto: ${escapePlanningHtml(productionOrder.proyecto)}</span>
       <span>Solución: ${escapePlanningHtml(productionOrder.customSolution)}</span>
       <span>Creación: ${escapePlanningHtml(productionOrder.fechaCreacion)}</span>
       <span>Due date: ${escapePlanningHtml(productionOrder.dueDate)}</span>

@@ -8,6 +8,42 @@ function calculateProductionKPIs(orders, totalOpen) {
   };
 }
 
+function filterProductionOrders(orders, filters) {
+  const search = normalizeProductionFilterValue(filters?.search);
+  const status = normalizeProductionFilterValue(filters?.status);
+  const trafficLight = normalizeProductionFilterValue(filters?.trafficLight);
+  const customer = normalizeProductionFilterValue(filters?.customer);
+
+  return (orders || []).filter(order => {
+    const orderSearchText = normalizeProductionFilterValue([
+      order.productionOrder,
+      order.customer,
+      order.product,
+      order.status,
+      order.responsible,
+      order.priority
+    ].join(" "));
+
+    return (!search || orderSearchText.includes(search))
+      && (!status || normalizeProductionFilterValue(order.status) === status)
+      && (!trafficLight || normalizeProductionFilterValue(order.trafficLight) === trafficLight)
+      && (!customer || normalizeProductionFilterValue(order.customer) === customer);
+  });
+}
+
+function getProductionFilterOptions(orders, field) {
+  return [...new Set((orders || []).map(order => order[field]).filter(Boolean))]
+    .sort((first, second) => String(first).localeCompare(String(second), "es"));
+}
+
+function normalizeProductionFilterValue(value) {
+  return String(value || "")
+    .trim()
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
+}
+
 function formatProductionDate(value) {
   if (!value) return "No informada";
   if (typeof value.toDate === "function") return value.toDate().toLocaleDateString("es-CL");
