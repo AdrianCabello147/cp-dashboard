@@ -24,12 +24,14 @@ async function getProductionOrdersPage(cursor = null, direction = "next") {
     clauses.splice(1, 1, endBefore(cursor), limitToLast(PRODUCTION_PAGE_SIZE + 1));
   }
 
-  const snapshot = await getDocs(query(orders, ...clauses));
+  const snapshot = await getProductionOrdersSnapshot(getDocs, query, orders, clauses, cursor, direction, orderBy, limit, startAfter, endBefore, limitToLast);
   let docs = snapshot.docs;
   const hasOverflow = docs.length > PRODUCTION_PAGE_SIZE;
   if (hasOverflow) docs = direction === "next" ? docs.slice(0, PRODUCTION_PAGE_SIZE) : docs.slice(1);
 
-  const mappedOrders = docs.map(doc => mapProductionOrder(doc.id, doc.data()));
+  const mappedOrders = docs
+    .map(doc => mapProductionOrder(doc.id, doc.data()))
+    .filter(order => order.status !== "Cerrada");
   const components = mappedOrders.length ? await getProductionComponents(collectionGroup, getDocs, query, where, mappedOrders) : [];
   const componentsByOrder = components.reduce((grouped, component) => {
     (grouped[component.productionOrderId] ||= []).push(component);
@@ -46,10 +48,33 @@ async function getProductionOrdersPage(cursor = null, direction = "next") {
   };
 }
 
+async function getProductionOrdersSnapshot(getDocs, query, orders, clauses, cursor, direction, orderBy, limit, startAfter, endBefore, limitToLast) {
+  try {
+    return await getDocs(query(orders, ...clauses));
+  } catch (error) {
+    console.warn("No se pudo ejecutar la consulta optimizada de Produccion. Se usara consulta simple de respaldo.", error);
+
+    const fallbackClauses = [orderBy("sap.Production Order"), limit(PRODUCTION_PAGE_SIZE + 1)];
+
+    if (cursor && direction === "next") fallbackClauses.splice(1, 0, startAfter(cursor));
+    if (cursor && direction === "previous") {
+      fallbackClauses.splice(1, 1, endBefore(cursor), limitToLast(PRODUCTION_PAGE_SIZE + 1));
+    }
+
+    return await getDocs(query(orders, ...fallbackClauses));
+  }
+}
+
 async function getProductionComponents(collectionGroup, getDocs, query, where, orders) {
   const values = orders.map(order => /^\d+$/.test(order.id) ? Number(order.id) : order.id);
-  const snapshot = await getDocs(query(collectionGroup(productionFirestore.db, "components"), where("sap.Prod_DocEntry", "in", values)));
-  return snapshot.docs.map(doc => mapProductionComponent(doc.data()));
+
+  try {
+    const snapshot = await getDocs(query(collectionGroup(productionFirestore.db, "components"), where("sap.Prod_DocEntry", "in", values)));
+    return snapshot.docs.map(doc => mapProductionComponent(doc.data()));
+  } catch (error) {
+    console.warn("No se pudieron cargar componentes de Produccion. Se mostraran OT sin detalle de componentes.", error);
+    return [];
+  }
 }
 
 function mapProductionComponent(data) {
@@ -75,7 +100,13 @@ async function getProductionKPIs() {
   const { db, collection, getCountFromServer, query, where } = await getProductionFirestore();
   const orders = collection(db, "productionOrders");
   const count = async (...clauses) => (await getCountFromServer(query(orders, ...clauses))).data().count;
-  return { total: await count(where("sap.Estado OT", "!=", "Cerrada")) };
+
+  try {
+    return { total: await count(where("sap.Estado OT", "!=", "Cerrada")) };
+  } catch (error) {
+    console.warn("No se pudo calcular KPI total de Produccion desde Firestore.", error);
+    return { total: null };
+  }
 }
 
 function mapProductionOrder(id, data) {

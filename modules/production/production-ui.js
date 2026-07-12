@@ -17,8 +17,11 @@ function renderProductionError(error) {
   if (!container) return;
 
   const code = error?.code || "";
+  const detail = error?.message || "";
   const message = code.includes("permission-denied")
     ? "No tienes permisos para consultar Producción."
+    : code.includes("failed-precondition")
+      ? "Falta aprobar un índice de Firestore para Producción."
     : code.includes("unavailable")
       ? "Error de red al consultar Firestore."
       : "No fue posible cargar Producción.";
@@ -27,6 +30,7 @@ function renderProductionError(error) {
     <section class="planning-weekly">
       <div class="comments-empty">
         <p>${escapeProductionHtml(message)}</p>
+        ${detail ? `<small>${escapeProductionHtml(code || detail)}</small>` : ""}
         <button class="task-action-btn" onclick="loadProductionPage()">Reintentar</button>
       </div>
     </section>

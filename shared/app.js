@@ -1,6 +1,6 @@
-import { FEATURES } from "./features.js?v=2026-07-12-production-admin-access-v1";
+import { FEATURES } from "./features.js?v=2026-07-12-production-fallback-v1";
 
-const APP_VERSION = window.APP_VERSION || "2026-07-12-production-admin-access-v1";
+const APP_VERSION = window.APP_VERSION || "2026-07-12-production-fallback-v1";
 const PRODUCTION_ALLOWED_USERS = ["acabello@alte.cl"];
 
 function isProductionUserAllowed() {
