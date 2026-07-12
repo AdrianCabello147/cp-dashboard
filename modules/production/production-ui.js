@@ -30,7 +30,7 @@ function renderProductionError(error) {
     <section class="planning-weekly">
       <div class="comments-empty">
         <p>${escapeProductionHtml(message)}</p>
-        ${detail ? `<small>${escapeProductionHtml(code || detail)}</small>` : ""}
+        ${detail || code ? `<p class="production-error-detail">${escapeProductionHtml(code || detail)}</p>` : ""}
         <button class="task-action-btn" onclick="loadProductionPage()">Reintentar</button>
       </div>
     </section>

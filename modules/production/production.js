@@ -6,7 +6,7 @@ async function initProductionModule() { if (!window.isProductionUserAllowed?.())
 async function loadProductionPage(cursor = null, direction = "next") {
   renderProductionLoading();
   try { [PRODUCTION_PAGE, PRODUCTION_KPIS] = await Promise.all([getProductionOrdersPage(cursor, direction), getProductionKPIs()]); renderProductionModule(); }
-  catch (error) { renderProductionError(error); }
+  catch (error) { console.error("Error al cargar Produccion.", error); renderProductionError(error); }
 }
 
 function updateProductionFilter(filterName, value) {

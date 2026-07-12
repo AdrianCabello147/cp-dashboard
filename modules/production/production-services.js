@@ -6,7 +6,7 @@ async function getProductionFirestore() {
   if (productionFirestore) return productionFirestore;
 
   const [{ db }, firestore] = await Promise.all([
-    import("../../auth/firebase-config.js"),
+    import("/auth/firebase-config.js"),
     import("https://www.gstatic.com/firebasejs/12.15.0/firebase-firestore.js")
   ]);
 
@@ -17,14 +17,7 @@ async function getProductionFirestore() {
 async function getProductionOrdersPage(cursor = null, direction = "next") {
   const { db, collection, collectionGroup, getDocs, query, where, orderBy, limit, startAfter, endBefore, limitToLast } = await getProductionFirestore();
   const orders = collection(db, "productionOrders");
-  const clauses = [where("sap.Estado OT", "!=", "Cerrada"), orderBy("sap.Estado OT"), orderBy("sap.Production Order"), limit(PRODUCTION_PAGE_SIZE + 1)];
-
-  if (cursor && direction === "next") clauses.splice(1, 0, startAfter(cursor));
-  if (cursor && direction === "previous") {
-    clauses.splice(1, 1, endBefore(cursor), limitToLast(PRODUCTION_PAGE_SIZE + 1));
-  }
-
-  const snapshot = await getProductionOrdersSnapshot(getDocs, query, orders, clauses, cursor, direction, orderBy, limit, startAfter, endBefore, limitToLast);
+  const snapshot = await getProductionOrdersSnapshot(getDocs, query, orders, cursor, direction, limit, startAfter, endBefore, limitToLast);
   let docs = snapshot.docs;
   const hasOverflow = docs.length > PRODUCTION_PAGE_SIZE;
   if (hasOverflow) docs = direction === "next" ? docs.slice(0, PRODUCTION_PAGE_SIZE) : docs.slice(1);
@@ -44,25 +37,20 @@ async function getProductionOrdersPage(cursor = null, direction = "next") {
     first: docs[0] || null,
     last: docs[docs.length - 1] || null,
     hasNext: direction === "next" ? hasOverflow : Boolean(cursor),
-    hasPrevious: direction === "previous" ? hasOverflow : Boolean(cursor)
+    hasPrevious: false
   };
 }
 
-async function getProductionOrdersSnapshot(getDocs, query, orders, clauses, cursor, direction, orderBy, limit, startAfter, endBefore, limitToLast) {
-  try {
-    return await getDocs(query(orders, ...clauses));
-  } catch (error) {
-    console.warn("No se pudo ejecutar la consulta optimizada de Produccion. Se usara consulta simple de respaldo.", error);
+async function getProductionOrdersSnapshot(getDocs, query, orders, cursor, direction, limit, startAfter, endBefore, limitToLast) {
+  const clauses = [limit(PRODUCTION_PAGE_SIZE + 1)];
 
-    const fallbackClauses = [orderBy("sap.Production Order"), limit(PRODUCTION_PAGE_SIZE + 1)];
-
-    if (cursor && direction === "next") fallbackClauses.splice(1, 0, startAfter(cursor));
-    if (cursor && direction === "previous") {
-      fallbackClauses.splice(1, 1, endBefore(cursor), limitToLast(PRODUCTION_PAGE_SIZE + 1));
-    }
-
-    return await getDocs(query(orders, ...fallbackClauses));
+  if (cursor && direction === "next") clauses.unshift(startAfter(cursor));
+  if (cursor && direction === "previous") {
+    clauses.unshift(endBefore(cursor));
+    clauses[clauses.length - 1] = limitToLast(PRODUCTION_PAGE_SIZE + 1);
   }
+
+  return await getDocs(query(orders, ...clauses));
 }
 
 async function getProductionComponents(collectionGroup, getDocs, query, where, orders) {
