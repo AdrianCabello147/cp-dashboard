@@ -155,11 +155,16 @@ function renderProductionTable(orders) {
           <tr>
             <th>Production Order</th>
             <th>Cliente</th>
-            <th>Producto</th>
+            <th>Producto / ensamble</th>
             <th>Estado</th>
-            <th>Fecha compromiso</th>
+            <th>Fecha compromiso SO</th>
+            <th>Target Day OT</th>
+            <th>Fecha término real</th>
             <th>Días restantes</th>
+            <th>Días atraso</th>
             <th>OTD</th>
+            <th>Responsable</th>
+            <th>Prioridad</th>
             <th>Total comp.</th>
             <th>Pendientes</th>
             <th>Sin stock</th>
@@ -189,15 +194,20 @@ function renderProductionOrderRows(order) {
       <td>${escapeProductionHtml(order.product)}</td>
       <td>${escapeProductionHtml(order.status)}</td>
       <td>${formatProductionDate(order.salesOrderCommitmentDate)}</td>
+      <td>${formatProductionDate(order.targetDate)}</td>
+      <td>${formatProductionDate(order.actualEndDate)}</td>
       <td>${escapeProductionHtml(productionDaysRemaining(order.salesOrderCommitmentDate))}</td>
+      <td>${escapeProductionHtml(order.lateDays)}</td>
       <td><span class="task-priority production-light-${order.trafficLight.toLowerCase()}">${escapeProductionHtml(order.trafficLight)}</span></td>
+      <td>${escapeProductionHtml(order.responsible)}</td>
+      <td>${escapeProductionHtml(order.priority)}</td>
       <td>${order.totalComponents}</td>
       <td>${order.pendingComponents}</td>
       <td>${order.noStockComponents}</td>
       <td>${formatProductionDate(order.nextArrival)}</td>
     </tr>
     <tr id="production-components-${safeId}" class="production-components-row" hidden>
-      <td colspan="11">${renderProductionComponents(order.components)}</td>
+      <td colspan="16">${renderProductionComponents(order.components)}</td>
     </tr>
   `;
 }
@@ -210,7 +220,7 @@ function renderProductionComponents(components) {
       <thead>
         <tr>
           <th>Código SAP</th>
-          <th>Descripción</th>
+          <th>Ensamble / componente</th>
           <th>Cantidad requerida</th>
           <th>Cantidad disponible</th>
           <th>Estado</th>
@@ -232,7 +242,6 @@ function renderProductionComponents(components) {
     </table>
   `;
 }
-
 function toggleProductionComponents(id) {
   const row = document.getElementById(`production-components-${id}`);
   if (row) row.hidden = !row.hidden;

@@ -15,16 +15,14 @@ async function getProductionFirestore() {
 }
 
 async function getProductionOrdersPage(cursor = null, direction = "next") {
-  const { db, collection, collectionGroup, getDocs, query, where, orderBy, limit, startAfter, endBefore, limitToLast } = await getProductionFirestore();
+  const { db, collection, collectionGroup, getDocs, query, where } = await getProductionFirestore();
   const orders = collection(db, "productionOrders");
-  const snapshot = await getProductionOrdersSnapshot(getDocs, query, orders, cursor, direction, limit, startAfter, endBefore, limitToLast);
-  let docs = snapshot.docs;
-  const hasOverflow = docs.length > PRODUCTION_PAGE_SIZE;
-  if (hasOverflow) docs = direction === "next" ? docs.slice(0, PRODUCTION_PAGE_SIZE) : docs.slice(1);
+  const snapshot = await getDocs(query(orders));
 
-  const mappedOrders = docs
+  const mappedOrders = snapshot.docs
     .map(doc => mapProductionOrder(doc.id, doc.data()))
-    .filter(order => order.status !== "Cerrada");
+    .filter(isProductionOrderOpen)
+    .sort(compareProductionOrders);
   const components = mappedOrders.length ? await getProductionComponents(collectionGroup, getDocs, query, where, mappedOrders) : [];
   const componentsByOrder = components.reduce((grouped, component) => {
     (grouped[component.productionOrderId] ||= []).push(component);
@@ -34,31 +32,67 @@ async function getProductionOrdersPage(cursor = null, direction = "next") {
 
   return {
     orders: mappedOrders,
-    first: docs[0] || null,
-    last: docs[docs.length - 1] || null,
-    hasNext: direction === "next" ? hasOverflow : Boolean(cursor),
+    first: null,
+    last: null,
+    hasNext: false,
     hasPrevious: false
   };
 }
 
-async function getProductionOrdersSnapshot(getDocs, query, orders, cursor, direction, limit, startAfter, endBefore, limitToLast) {
-  const clauses = [limit(PRODUCTION_PAGE_SIZE + 1)];
+function isProductionOrderOpen(order) {
+  const status = normalizeProductionStatus(order.status);
+  return status !== "cerrada" && status !== "cerrado";
+}
 
-  if (cursor && direction === "next") clauses.unshift(startAfter(cursor));
-  if (cursor && direction === "previous") {
-    clauses.unshift(endBefore(cursor));
-    clauses[clauses.length - 1] = limitToLast(PRODUCTION_PAGE_SIZE + 1);
+function compareProductionOrders(firstOrder, secondOrder) {
+  const firstDate = getProductionOrderSortDate(firstOrder);
+  const secondDate = getProductionOrderSortDate(secondOrder);
+
+  if (firstDate !== secondDate) {
+    return firstDate - secondDate;
   }
 
-  return await getDocs(query(orders, ...clauses));
+  return String(firstOrder.productionOrder).localeCompare(String(secondOrder.productionOrder), "es", {
+    numeric: true
+  });
+}
+
+function getProductionOrderSortDate(order) {
+  const date = order.salesOrderCommitmentDate || order.targetDate;
+  const parsedDate = typeof date?.toDate === "function" ? date.toDate() : new Date(date);
+
+  return Number.isNaN(parsedDate.getTime()) ? Number.MAX_SAFE_INTEGER : parsedDate.getTime();
+}
+
+function normalizeProductionStatus(value) {
+  return String(value || "")
+    .trim()
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
 }
 
 async function getProductionComponents(collectionGroup, getDocs, query, where, orders) {
-  const values = orders.map(order => /^\d+$/.test(order.id) ? Number(order.id) : order.id);
+  const numericValues = orders
+    .map(order => order.id)
+    .filter(id => /^\d+$/.test(id))
+    .map(Number);
+  const textValues = orders.map(order => String(order.id));
 
   try {
-    const snapshot = await getDocs(query(collectionGroup(productionFirestore.db, "components"), where("sap.Prod_DocEntry", "in", values)));
-    return snapshot.docs.map(doc => mapProductionComponent(doc.data()));
+    const snapshots = await Promise.all([
+      numericValues.length ? getDocs(query(collectionGroup(productionFirestore.db, "components"), where("sap.Prod_DocEntry", "in", numericValues))) : null,
+      textValues.length ? getDocs(query(collectionGroup(productionFirestore.db, "components"), where("sap.Prod_DocEntry", "in", textValues))) : null
+    ]);
+    const componentsByKey = new Map();
+
+    snapshots.filter(Boolean).forEach(snapshot => {
+      snapshot.docs.forEach(doc => {
+        componentsByKey.set(doc.ref.path, mapProductionComponent(doc.data()));
+      });
+    });
+
+    return [...componentsByKey.values()];
   } catch (error) {
     console.warn("No se pudieron cargar componentes de Produccion. Se mostraran OT sin detalle de componentes.", error);
     return [];
