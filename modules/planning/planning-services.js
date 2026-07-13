@@ -8,7 +8,7 @@ import {
     getTimeline,
     updateTask,
     claimPlanningTask as claimPlanningTaskInFirestore
-} from "../../auth/firestore.js";
+} from "../../auth/firestore.js?v=2026-07-13-planning-unassigned-pool-v1";
 
 const PLANNING_FIRESTORE_TIMEOUT_MS = 10000;
 
