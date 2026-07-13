@@ -628,6 +628,48 @@ function applyAdminTakeAndFinishPlanningTask(taskId, user, completedTask) {
   return updatedTask;
 }
 
+function applyFinishedPlanningTask(taskId, completedTask, user) {
+  let updatedTask = null;
+  const persistedTask = typeof completedTask === "object" && completedTask !== null ? completedTask : {};
+  const completedAt = persistedTask.fechaTerminoReal || persistedTask.terminadoAt || new Date().toISOString();
+  const userId = getPlanningUserUid(user);
+  const userName = user?.name || user?.email || "Usuario";
+
+  PLANNING_TASKS = PLANNING_TASKS.map(task => {
+    if (task.id !== taskId) return task;
+
+    updatedTask = {
+      ...task,
+      ...persistedTask,
+      id: taskId,
+      estado: persistedTask.estado || "Terminado",
+      inicioReal: persistedTask.inicioReal || completedAt,
+      fechaTerminoReal: completedAt,
+      terminadoAt: persistedTask.terminadoAt || completedAt,
+      terminadoBy: persistedTask.terminadoBy || userId,
+      updatedAt: persistedTask.updatedAt || completedAt,
+      updatedBy: persistedTask.updatedBy || userId,
+      executionLog: [...(task.executionLog || []), { action: "finish", date: completedAt }],
+      timelineLocal: [
+        ...(task.timelineLocal || []),
+        {
+          ...createPlanningTimelineEvent("finish", "Tarea terminada", completedAt),
+          user: userName,
+          userId,
+          previousStatus: task.estado || "",
+          nextStatus: persistedTask.estado || "Terminado",
+          inicioReal: persistedTask.inicioReal || completedAt,
+          fechaTerminoReal: completedAt
+        }
+      ]
+    };
+
+    return updatedTask;
+  });
+
+  return updatedTask;
+}
+
 function addPlanningTask(task) {
   const taskId = task.id || `TASK-${Date.now()}`;
 

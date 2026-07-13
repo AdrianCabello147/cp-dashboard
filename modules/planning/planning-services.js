@@ -8,11 +8,12 @@ import {
     getTimeline,
     updateTask,
     claimPlanningTask as claimPlanningTaskInFirestore,
+    finishPlanningTask as finishPlanningTaskInFirestore,
     adminTakeAndFinishPlanningTask as adminTakeAndFinishPlanningTaskInFirestore,
     saveOperatorPlanningDatesOnce as saveOperatorPlanningDatesOnceInFirestore,
     getPlanningUserUid,
     validatePlanningDateRange as validatePlanningDateRangeInFirestore
-} from "../../auth/firestore.js?v=2026-07-13-planning-workflow-v6";
+} from "../../auth/firestore.js?v=2026-07-13-planning-operator-finish-v1";
 
 const PLANNING_FIRESTORE_TIMEOUT_MS = 10000;
 
@@ -111,6 +112,13 @@ export async function claimPlanningTask(taskId, currentUser) {
     return withPlanningFirestoreTimeout(
         claimPlanningTaskInFirestore(taskId, currentUser),
         "Timeout tomando tarea de Planificación"
+    );
+}
+
+export async function finishPlanningTask(taskId, currentUser) {
+    return withPlanningFirestoreTimeout(
+        finishPlanningTaskInFirestore(taskId, currentUser),
+        "Timeout terminando tarea de Planificación"
     );
 }
 
@@ -415,6 +423,7 @@ window.loadPlanningResponsibleUsers = loadPlanningResponsibleUsers;
 window.savePlanningTask = savePlanningTask;
 window.updatePlanningTaskData = updatePlanningTaskData;
 window.claimPlanningTask = claimPlanningTask;
+window.finishPlanningTask = finishPlanningTask;
 window.adminTakeAndFinishPlanningTask = adminTakeAndFinishPlanningTask;
 window.saveOperatorPlanningDatesOnce = saveOperatorPlanningDatesOnce;
 window.loadPlanningTaskComments = loadPlanningTaskComments;

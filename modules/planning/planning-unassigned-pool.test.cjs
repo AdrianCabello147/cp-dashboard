@@ -60,7 +60,7 @@ test('claim operation is a transaction with server timestamps and audit event', 
 });
 
 test('Planning module graph uses one cache version and named Firestore exports exist', () => {
-  const version = '2026-07-13-planning-workflow-v6';
+  const version = '2026-07-13-planning-operator-finish-v1';
   const requiredExports = ['createTask', 'updateTask', 'getAllTasks', 'getAssignableUsers', 'addComment', 'getComments', 'addTimelineEvent', 'getTimeline', 'claimPlanningTask'];
   const planningImports = ['addComment', 'addTimelineEvent', 'createTask', 'getComments', 'getAllTasks', 'getAssignableUsers', 'getTimeline', 'updateTask'];
 
@@ -118,7 +118,7 @@ test('create and self-assignment pathways preserve the unassigned and concurrenc
   assert.match(firestore, /nextStatus: task\.estado \|\| "Pendiente"/);
   const claimSource = firestore.slice(
     firestore.indexOf('export async function claimPlanningTask'),
-    firestore.indexOf('export async function adminTakeAndFinishPlanningTask')
+    firestore.indexOf('export async function finishPlanningTask')
   );
   assert.equal((claimSource.match(/runTransaction\(db, async transaction/g) || []).length, 1);
   assert.equal((claimSource.match(/action: "self_assigned"/g) || []).length, 1);
@@ -459,6 +459,102 @@ test('completed task status, completion date, ISO week, and local merge share on
   assert.match(planningUi, /Semana \$\{Number\(String\(week\)\.replace\("W", ""\)\)\}/);
   assert.match(planning, /"Estado": isPlanningTaskCompleted\(task\) \? "Terminado"/);
   assert.match(planning, /"Fecha término real": formatPlanningExportDate\(task\.fechaTerminoReal \|\| task\.terminadoAt/);
+});
+
+test('operator finish persists one canonical completion contract and timeline transaction', () => {
+  const finishSource = firestore.slice(
+    firestore.indexOf('export async function finishPlanningTask'),
+    firestore.indexOf('export async function adminTakeAndFinishPlanningTask')
+  );
+
+  assert.equal((finishSource.match(/runTransaction\(db, async transaction/g) || []).length, 1);
+  assert.equal((finishSource.match(/action: "finish"/g) || []).length, 1);
+  assert.match(finishSource, /const completedAt = new Date\(\)\.toISOString\(\)/);
+  assert.match(finishSource, /const startedAt = task\.inicioReal \|\| completedAt/);
+  assert.match(finishSource, /estado: "Terminado"/);
+  assert.match(finishSource, /inicioReal: startedAt/);
+  assert.match(finishSource, /fechaTerminoReal: completedAt/);
+  assert.match(finishSource, /terminadoAt: completedAt/);
+  assert.match(finishSource, /terminadoBy: currentUserId/);
+  assert.match(finishSource, /updatedAt: serverTimestamp\(\)/);
+  assert.match(finishSource, /updatedBy: currentUserId/);
+  assert.match(planningServices, /finishPlanningTask as finishPlanningTaskInFirestore/);
+  assert.match(planning, /const completedTask = await finishPlanningTask\(taskId, currentUser\)/);
+  assert.match(planning, /applyFinishedPlanningTask\(taskId, completedTask, currentUser\)/);
+});
+
+test('operator finish merges persisted dates locally into the ISO weekly completed summary', () => {
+  const localContext = createPlanningUiContext();
+  const david = { id: 'david-1', name: 'David Salas', email: 'david@alte.cl', role: 'operator', active: true, assignable: true };
+  const startedAt = '2026-07-13T10:00:00.000Z';
+  const completedAt = '2026-07-13T10:45:00.000Z';
+  const task = {
+    id: 'operator-finish-existing-start',
+    planningCode: 'PP-2026-29-001',
+    actividad: 'Validación operator',
+    cliente: 'Cliente PSI',
+    responsableNombre: 'David Salas',
+    estado: 'En proceso',
+    inicioReal: startedAt,
+    timelineLocal: []
+  };
+
+  localContext.setPlanningTasks([task]);
+  const finished = localContext.applyFinishedPlanningTask(task.id, {
+    id: task.id,
+    estado: 'Terminado',
+    inicioReal: startedAt,
+    fechaTerminoReal: completedAt,
+    terminadoAt: completedAt,
+    terminadoBy: david.id,
+    updatedAt: completedAt,
+    updatedBy: david.id
+  }, david);
+
+  assert.equal(finished.estado, 'Terminado');
+  assert.equal(finished.inicioReal, startedAt);
+  assert.equal(finished.fechaTerminoReal, completedAt);
+  assert.equal(finished.terminadoAt, completedAt);
+  assert.equal(finished.terminadoBy, david.id);
+  assert.equal(localContext.isPlanningTaskCompleted(finished), true);
+  assert.equal(localContext.getIsoWeekKeyFromPlanningDate(localContext.getPlanningTaskCompletionDate(finished)), '2026-W29');
+  assert.equal(localContext.getPlanningCompletedWeekKey(finished), '2026-W29');
+  assert.equal(localContext.getPlanningDurationLabel(finished), '45 min');
+  assert.equal(finished.timelineLocal.filter(event => event.type === 'finish').length, 1);
+  assert.match(localContext.renderPlanningCompletedTask(finished), /David Salas/);
+  assert.match(localContext.renderPlanningCompletedTask(finished), /45 min/);
+  assert.match(planning, /"Fecha término real": formatPlanningExportDate\(task\.fechaTerminoReal \|\| task\.terminadoAt/);
+});
+
+test('operator direct finish uses one instant for a zero-minute duration without changing planned dates', () => {
+  const localContext = createPlanningUiContext();
+  const david = { id: 'david-1', name: 'David Salas' };
+  const completedAt = '2026-07-13T12:00:00.000Z';
+  const task = {
+    id: 'operator-finish-direct',
+    estado: 'Pendiente',
+    fechaInicioPlanificada: '2026-07-13',
+    fechaObjetivo: '',
+    timelineLocal: []
+  };
+
+  localContext.setPlanningTasks([task]);
+  const finished = localContext.applyFinishedPlanningTask(task.id, {
+    estado: 'Terminado',
+    inicioReal: completedAt,
+    fechaTerminoReal: completedAt,
+    terminadoAt: completedAt,
+    terminadoBy: david.id,
+    updatedAt: completedAt,
+    updatedBy: david.id
+  }, david);
+
+  assert.equal(finished.inicioReal, completedAt);
+  assert.equal(finished.fechaTerminoReal, completedAt);
+  assert.equal(finished.fechaInicioPlanificada, '2026-07-13');
+  assert.equal(finished.fechaObjetivo, '');
+  assert.equal(localContext.getPlanningDurationLabel(finished), '0 min');
+  assert.equal(localContext.getPlanningCompletedWeekKey(finished), '2026-W29');
 });
 
 test('operator dates modal and transaction restrict writes to the two dates and consume the opportunity atomically', () => {

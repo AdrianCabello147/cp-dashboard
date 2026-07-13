@@ -102,6 +102,14 @@ async function savePlanningTaskChanges(taskId, task) {
 }
 
 async function executePlanningTaskAction(taskId, action) {
+    if (action === "finish") {
+        const currentUser = window.currentUserProfile;
+        const completedTask = await finishPlanningTask(taskId, currentUser);
+        applyFinishedPlanningTask(taskId, completedTask, currentUser);
+        refreshPlanningBoard();
+        return completedTask;
+    }
+
     const updatedTask = executePlanningTask(taskId, action);
 
     if (updatedTask) {

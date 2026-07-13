@@ -1,4 +1,4 @@
-import { auth, db } from "./firebase-config.js?v=2026-07-13-planning-workflow-v6";
+import { auth, db } from "./firebase-config.js?v=2026-07-13-planning-operator-finish-v1";
 
 import {
     collection,
@@ -257,6 +257,61 @@ export async function claimPlanningTask(taskId, currentUser) {
         });
 
         return { id: taskId, ...task, ...update, estado: task.estado || "Pendiente" };
+    });
+}
+
+export async function finishPlanningTask(taskId, currentUser) {
+    const currentUserId = getPlanningUserUid(currentUser);
+
+    if (!taskId || !currentUserId) {
+        const error = new Error("No tienes permisos para terminar esta tarea.");
+        error.code = "planning/finish-not-allowed";
+        throw error;
+    }
+
+    const taskRef = doc(db, "tasks", taskId);
+    const timelineRef = doc(TIMELINE);
+    const userName = currentUser.name || currentUser.email || "Usuario";
+
+    return runTransaction(db, async transaction => {
+        const snapshot = await transaction.get(taskRef);
+
+        if (!snapshot.exists()) {
+            const error = new Error("La tarea ya no existe.");
+            error.code = "planning/task-not-found";
+            throw error;
+        }
+
+        const task = snapshot.data();
+        const completedAt = new Date().toISOString();
+        const startedAt = task.inicioReal || completedAt;
+        const update = {
+            estado: "Terminado",
+            inicioReal: startedAt,
+            fechaTerminoReal: completedAt,
+            terminadoAt: completedAt,
+            terminadoBy: currentUserId,
+            updatedAt: serverTimestamp(),
+            updatedBy: currentUserId
+        };
+
+        transaction.update(taskRef, update);
+        transaction.set(timelineRef, {
+            module: "planning",
+            code: task.planningCode || taskId,
+            taskId,
+            action: "finish",
+            comment: `${userName} terminó la tarea.`,
+            userId: currentUserId,
+            userName,
+            previousStatus: task.estado || "",
+            nextStatus: "Terminado",
+            inicioReal: startedAt,
+            fechaTerminoReal: completedAt,
+            createdAt: serverTimestamp()
+        });
+
+        return { id: taskId, ...task, ...update, updatedAt: completedAt };
     });
 }
 

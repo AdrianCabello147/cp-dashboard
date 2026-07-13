@@ -1,6 +1,6 @@
-import { auth } from "./firebase-config.js?v=2026-07-13-planning-workflow-v6";
+import { auth } from "./firebase-config.js?v=2026-07-13-planning-operator-finish-v1";
 import { onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/12.15.0/firebase-auth.js";
-import { ensureUserProfile } from "./firestore.js?v=2026-07-13-planning-workflow-v6";
+import { ensureUserProfile } from "./firestore.js?v=2026-07-13-planning-operator-finish-v1";
 
 onAuthStateChanged(auth, async (user) => {
     if (user) {
