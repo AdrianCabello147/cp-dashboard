@@ -1,6 +1,6 @@
-import { auth } from "./firebase-config.js";
+import { auth } from "./firebase-config.js?v=2026-07-13-planning-workflow-v6";
 import { signInWithEmailAndPassword } from "https://www.gstatic.com/firebasejs/12.15.0/firebase-auth.js";
-import { ensureUserProfile } from "./firestore.js";
+import { ensureUserProfile } from "./firestore.js?v=2026-07-13-planning-workflow-v6";
 
 const loginForm = document.getElementById("loginForm");
 const loginError = document.getElementById("loginError");

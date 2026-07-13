@@ -6,6 +6,10 @@ const PLANNING_FILTERS = {
   search: ""
 };
 
+const PLANNING_UI_STATE = {
+  unassignedPoolExpanded: false
+};
+
 const PLANNING_COLLAPSE_STATE = {
   weekly: {},
   board: {},
@@ -99,6 +103,8 @@ function renderPlanningModule(tasks) {
       </div>
     </section>
 
+    ${renderPlanningDataError()}
+
     ${renderPlanningKPIs(kpis)}
 
     ${renderPlanningWeeklySection(weeklyTasks, currentISOWeek)}
@@ -118,6 +124,7 @@ function renderPlanningModule(tasks) {
     ${renderPlanningCompletedSummary(completedTasks)}
 
     ${renderNewTaskModal()}
+    ${renderOperatorPlanningDatesModal()}
     ${renderPlanningCommentsModal()}
     ${renderPlanningTimelineModal()}
   `;
@@ -364,13 +371,16 @@ function renderPlanningCompletedTask(task) {
 
       <div>
         <p>${escapePlanningHtml(getPlanningTaskResponsibleName(task) || "Sin responsable")}</p>
+        <span>Inicio real: ${escapePlanningHtml(task.inicioReal || "Sin fecha")}</span>
         <span>Objetivo: ${escapePlanningHtml(task.fechaObjetivo || "Sin fecha")}</span>
         <span>Término real: ${escapePlanningHtml(task.fechaTerminoReal || "Sin fecha")}</span>
+        ${getPlanningDurationLabel(task) ? `<span>Duración: ${escapePlanningHtml(getPlanningDurationLabel(task))}</span>` : ""}
         ${(task.cliente || task.proyecto) ? `<span>${escapePlanningHtml(task.cliente || "Sin cliente")} / ${escapePlanningHtml(task.proyecto || "Sin proyecto")}</span>` : ""}
       </div>
 
       <div class="task-secondary-actions">
         ${renderPlanningAdminActions(task)}
+        ${renderPlanningOperatorDatesAction(task)}
         <button type="button" class="task-action-btn" onclick="openPlanningComments('${task.id}', event)">
           Comentarios (${getPlanningCommentsCount(task)})
         </button>
@@ -542,6 +552,11 @@ function getActivePlanningFilters() {
 
 function updatePlanningFilter(filterName, value) {
   PLANNING_FILTERS[filterName] = value;
+
+  if (filterName === "responsable" && value === "__unassigned__") {
+    setPlanningUnassignedPoolExpanded(true);
+  }
+
   refreshPlanningBoard();
 
   if (filterName === "search") {
@@ -640,52 +655,21 @@ function getPlanningCompletedWeekOptions(tasks) {
 }
 
 function getPlanningCompletedWeekKey(task) {
-  const date = parsePlanningHistoryDate(task.fechaTerminoReal) || parsePlanningHistoryDate(task.fechaObjetivo);
-
-  if (!date) return "";
-
-  return `${getISOWeekYear(date)}-${String(getISOWeekNumber(date)).padStart(2, "0")}`;
+  return getIsoWeekKeyFromPlanningDate(getPlanningTaskCompletionDate(task));
 }
 
 function getCurrentPlanningISOWeekKey() {
-  const now = new Date();
-
-  return `${getISOWeekYear(now)}-${String(getISOWeekNumber(now)).padStart(2, "0")}`;
+  return getIsoWeekKeyFromPlanningDate(new Date());
 }
 
 function getPlanningWeekLabel(weekKey) {
   const [year, week] = (weekKey || getCurrentPlanningISOWeekKey()).split("-");
 
-  return `Semana ${Number(week)} / ${year}`;
-}
-
-function parsePlanningHistoryDate(value) {
-  if (!value) return null;
-
-  const text = value.toString().trim().split(",")[0].trim();
-  const isoDate = parsePlanningDate(text);
-
-  if (isoDate) {
-    return isoDate;
-  }
-
-  const dashParts = text.split("-");
-
-  if (dashParts.length === 3) {
-    const [day, month, year] = dashParts.map(Number);
-
-    if (day && month && year) {
-      return new Date(year < 100 ? year + 2000 : year, month - 1, day);
-    }
-  }
-
-  return null;
+  return `Semana ${Number(String(week).replace("W", ""))} / ${year}`;
 }
 
 function isPlanningTaskFinished(task) {
-  const status = normalizePlanningStatus(task?.estado);
-
-  return status === "terminado" || status === "terminada";
+  return isPlanningTaskCompleted(task);
 }
 
 function renderPlanningKPIs(kpis) {
@@ -793,6 +777,7 @@ function renderPlanningCard(task) {
 
       <div class="task-secondary-actions">
         ${renderPlanningAdminActions(task)}
+        ${renderPlanningOperatorDatesAction(task)}
         <button type="button" class="task-action-btn" onclick="openPlanningComments('${task.id}', event)">
           Comentarios (${getPlanningCommentsCount(task)})
         </button>
@@ -847,9 +832,34 @@ function canCurrentUserModifyPlanningTasks() {
   return window.currentUserProfile?.role === "admin";
 }
 
+function renderPlanningOperatorDatesAction(task) {
+  const canEditDates = canCurrentOperatorEditPlanningDates(task, window.currentUserProfile);
+
+  if (!canEditDates) {
+    return "";
+  }
+
+  return `<button type="button" class="task-action-btn" onclick="openOperatorPlanningDatesModal('${escapePlanningAttribute(task.id)}', event)">Definir fechas</button>`;
+}
+
+function renderPlanningDataError() {
+  const error = getPlanningDataError();
+
+  if (!error) return "";
+
+  return `
+    <section class="planning-load-error" role="alert">
+      <div><strong>No se pudieron cargar las tareas reales de Planning.</strong><span>Código: ${escapePlanningHtml(error.code || "unknown")}</span></div>
+      <p>${escapePlanningHtml(error.message || "Revisa la conexión o permisos de Firestore.")}</p>
+      <button type="button" class="secondary-btn" onclick="retryPlanningDataLoad()">Reintentar</button>
+    </section>
+  `;
+}
+
 function canCurrentUserClaimPlanningTask() {
   const user = window.currentUserProfile;
-  return Boolean(user?.id && user.active === true && user.assignable === true && ["admin", "operator"].includes(user.role));
+  const role = String(user?.role || "").trim().toLowerCase();
+  return Boolean(getPlanningUserUid(user) && user.active === true && user.assignable === true && ["admin", "operator"].includes(role));
 }
 
 function canCurrentUserDeletePlanningTasks() {
@@ -911,6 +921,107 @@ function renderPlanningTimelineModal() {
     </div>
   `;
 }
+
+function renderOperatorPlanningDatesModal() {
+  return `
+    <div id="operatorPlanningDatesModal" class="modal-overlay" hidden>
+      <div class="modal-card modal-card-compact">
+        <div class="modal-header">
+          <div><h3>Definir fechas planificadas</h3><p>Esta edición solo podrá realizarse una vez.</p></div>
+          <button type="button" class="modal-close" aria-label="Cerrar" onclick="closeOperatorPlanningDatesModal()">X</button>
+        </div>
+        <form id="operatorPlanningDatesForm" class="task-form" onsubmit="handleOperatorPlanningDatesSubmit(event)">
+          <input name="taskId" type="hidden">
+          <div class="form-grid">
+            <label>Fecha inicio planificada<input name="fechaInicioPlanificada" type="date" required></label>
+            <label>Fecha objetivo<input name="fechaObjetivo" type="date" required></label>
+          </div>
+          <div class="modal-actions">
+            <p id="operatorPlanningDatesError" class="task-modal-error" role="alert" hidden></p>
+            <button type="button" class="secondary-btn" onclick="closeOperatorPlanningDatesModal()">Cancelar</button>
+            <button id="operatorPlanningDatesSubmit" type="submit" class="primary-btn">Guardar fechas</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  `;
+}
+
+function openOperatorPlanningDatesModal(taskId, event) {
+  if (event) event.stopPropagation();
+
+  const task = getPlanningTasks().find(item => item.id === taskId);
+  if (!canCurrentOperatorEditPlanningDates(task, window.currentUserProfile)) {
+    console.warn("Acción no permitida para definir fechas.");
+    return;
+  }
+
+  const modal = document.getElementById("operatorPlanningDatesModal");
+  const form = document.getElementById("operatorPlanningDatesForm");
+  if (!modal || !form) return;
+
+  form.elements.taskId.value = task.id;
+  form.elements.fechaInicioPlanificada.value = toDateInputValue(task.fechaInicioPlanificada);
+  form.elements.fechaObjetivo.value = toDateInputValue(task.fechaObjetivo);
+  setOperatorPlanningDatesModalError("");
+  modal.hidden = false;
+}
+
+function closeOperatorPlanningDatesModal() {
+  const modal = document.getElementById("operatorPlanningDatesModal");
+  const form = document.getElementById("operatorPlanningDatesForm");
+  if (form) form.reset();
+  setOperatorPlanningDatesModalError("");
+  if (modal) modal.hidden = true;
+}
+
+function setOperatorPlanningDatesModalError(message) {
+  const error = document.getElementById("operatorPlanningDatesError");
+  if (!error) return;
+  error.textContent = message;
+  error.hidden = !message;
+}
+
+async function handleOperatorPlanningDatesSubmit(event) {
+  event.preventDefault();
+
+  const form = event.target;
+  const taskId = form.elements.taskId.value;
+  const dates = {
+    fechaInicioPlanificada: form.elements.fechaInicioPlanificada.value,
+    fechaObjetivo: form.elements.fechaObjetivo.value
+  };
+
+  const validationMessage = validatePlanningDateRange(dates.fechaInicioPlanificada, dates.fechaObjetivo);
+
+  if (validationMessage) {
+    setOperatorPlanningDatesModalError(validationMessage);
+    return;
+  }
+
+  try {
+    await saveOperatorPlanningDatesOnceAction(taskId, dates);
+    closeOperatorPlanningDatesModal();
+  } catch (error) {
+    console.error("[Planning][operator-dates]", getPlanningSafeErrorDetails("operator-planning-dates", "tasks", error));
+    setOperatorPlanningDatesModalError(getOperatorPlanningDatesErrorMessage(error));
+  }
+}
+
+function getOperatorPlanningDatesErrorMessage(error) {
+  if (error?.code === "planning/operator-dates-invalid") {
+    return error.message || "Las fechas planificadas no son válidas.";
+  }
+
+  const messages = {
+    "planning/operator-dates-already-used": "La edición única de fechas ya fue utilizada.",
+    "planning/operator-dates-not-owner": "No puedes editar las fechas de una tarea asignada a otro usuario.",
+    "planning/operator-dates-not-pending": "Solo puedes definir fechas mientras la tarea está pendiente.",
+    "planning/operator-dates-not-allowed": "No tienes permisos para editar estas fechas."
+  };
+  return messages[error?.code] || "No se pudieron guardar las fechas. Revisa conexión o permisos de Firestore.";
+}
+
 
 function renderNewTaskModal() {
   return `
@@ -1057,22 +1168,52 @@ function renderNewTaskModal() {
 }
 
 function renderPlanningUnassignedTaskPool(tasks) {
+  const expanded = isPlanningUnassignedPoolExpanded();
+  const content = tasks.length === 0
+    ? `<div class="planning-weekly-empty">No hay tareas disponibles para autoasignación.</div>`
+    : `<div class="planning-unassigned-list">${tasks.map(renderPlanningUnassignedTask).join("")}</div>`;
+
   return `
     <section class="planning-weekly planning-unassigned-pool">
-      <div class="planning-weekly-header"><div><h3>Bolsa de tareas disponibles</h3><p>Tareas pendientes sin responsable que pueden ser tomadas por el equipo.</p></div><span>${tasks.length} tareas disponibles</span></div>
-      ${tasks.length === 0 ? `<div class="planning-weekly-empty">No hay tareas disponibles para autoasignación.</div>` : `<div class="planning-unassigned-list">${tasks.map(renderPlanningUnassignedTask).join("")}</div>`}
+      <button type="button" class="planning-unassigned-toggle" aria-expanded="${expanded}" aria-controls="planningUnassignedPoolContent" onclick="togglePlanningUnassignedPool()">
+        <span class="planning-unassigned-chevron" aria-hidden="true">${expanded ? "▼" : "▶"}</span>
+        <span class="planning-unassigned-copy"><strong>Bolsa de tareas disponibles</strong><small>Tareas pendientes sin responsable que pueden ser tomadas por el equipo.</small></span>
+        <span class="planning-unassigned-count">${tasks.length} tareas disponibles</span>
+      </button>
+      <div id="planningUnassignedPoolContent" ${expanded ? "" : "hidden"}>${content}</div>
     </section>`;
+}
+
+function isPlanningUnassignedPoolExpanded() {
+  return PLANNING_UI_STATE.unassignedPoolExpanded === true;
+}
+
+function setPlanningUnassignedPoolExpanded(value) {
+  PLANNING_UI_STATE.unassignedPoolExpanded = value === true;
+  return PLANNING_UI_STATE.unassignedPoolExpanded;
+}
+
+function togglePlanningUnassignedPool() {
+  setPlanningUnassignedPoolExpanded(!isPlanningUnassignedPoolExpanded());
+  refreshPlanningBoard();
 }
 
 function renderPlanningUnassignedTask(task) {
   const canClaim = canCurrentUserClaimPlanningTask() && isPlanningTaskAvailableForSelfAssignment(task);
+  const canManage = canCurrentUserModifyPlanningTasks();
+  const canTakeAndFinish = canAdminTakeAndFinishPlanningTask(task, window.currentUserProfile);
   const createdAt = formatPlanningPoolDate(task.createdAt || task.fechaCreacion);
   return `<article class="task-card planning-pool-task ${getPlanningPriorityClass(task.prioridad)} ${getPlanningCardStatusClass(task.estado)}">
     <div class="task-card-header"><div class="task-title-block"><strong>${escapePlanningHtml(task.actividad || "Sin actividad")}</strong><span>${escapePlanningHtml(getPlanningTaskCode(task) || "Sin código")}</span></div><span class="task-status ${getPlanningStatusClass(task.estado)}">${escapePlanningHtml(getPlanningStatusLabel(task.estado))}</span></div>
     <p class="task-context">${escapePlanningHtml(task.cliente || "Sin cliente")} · ${escapePlanningHtml(task.otPsi || "Sin OT / PSI")}</p>
     <div class="task-meta"><span>Tipo: ${escapePlanningHtml(task.tipo || "Sin tipo")}</span><span>Prioridad: ${escapePlanningHtml(task.prioridad || "Normal")} · Complejidad: ${escapePlanningHtml(task.complejidad || "Sin definir")} · Puntos: ${escapePlanningHtml(getPlanningTaskComplexityPoints(task))}</span><span>Inicio planificado: ${escapePlanningHtml(task.fechaInicioPlanificada || "Sin fecha")}</span><span>Objetivo: ${escapePlanningHtml(task.fechaObjetivo || "Sin fecha")}</span>${renderPlanningDeviationReasonMeta(task)}<span>Creada: ${escapePlanningHtml(createdAt || "No informada")}</span></div>
     ${task.comentario ? `<p class="planning-pool-comment">${escapePlanningHtml(task.comentario)}</p>` : ""}
-    ${canClaim ? `<button type="button" class="primary-btn planning-claim-btn" onclick="handlePlanningClaimTask('${escapePlanningAttribute(task.id)}', event)">Tomar tarea</button>` : ""}
+    ${(canClaim || canManage || canTakeAndFinish) ? `<div class="planning-pool-actions">
+      ${canManage ? `<button type="button" class="secondary-btn" aria-label="Editar ${escapePlanningAttribute(getPlanningTaskCode(task) || "tarea")}" onclick="editPlanningTask('${escapePlanningAttribute(task.id)}', event)">Editar</button>` : ""}
+      ${canClaim ? `<button type="button" class="primary-btn planning-claim-btn" onclick="handlePlanningClaimTask('${escapePlanningAttribute(task.id)}', event)">Tomar tarea</button>` : ""}
+      ${canTakeAndFinish ? `<button type="button" class="secondary-btn planning-admin-finish-btn" aria-label="Tomar y terminar ${escapePlanningAttribute(getPlanningTaskCode(task) || "tarea")}" onclick="handlePlanningAdminTakeAndFinish('${escapePlanningAttribute(task.id)}', event)">Tomar y terminar</button>` : ""}
+      ${canManage ? `<button type="button" class="secondary-btn danger-btn" aria-label="Eliminar ${escapePlanningAttribute(getPlanningTaskCode(task) || "tarea")}" onclick="handlePlanningDeleteTask('${escapePlanningAttribute(task.id)}', event)">Eliminar</button>` : ""}
+    </div>` : ""}
   </article>`;
 }
 
@@ -1171,7 +1312,8 @@ async function handleNewTaskSubmit(event) {
 
     setPlanningTaskSavingState(true);
 
-    const hasResponsible = Boolean(responsibleUser.uid && responsibleUser.name);
+    const responsibleUid = getPlanningUserUid(responsibleUser);
+    const hasResponsible = Boolean(responsibleUid && responsibleUser.name);
     const task = {
 
         actividad,
@@ -1181,9 +1323,9 @@ async function handleNewTaskSubmit(event) {
         cliente: formData.get("cliente") || "",
 
         responsableTaller: hasResponsible ? responsibleUser.name : "",
-        responsableId: hasResponsible ? responsibleUser.uid : "",
+        responsableId: hasResponsible ? responsibleUid : "",
         responsableNombre: hasResponsible ? responsibleUser.name : "",
-        responsibleUid: hasResponsible ? responsibleUser.uid : "",
+        responsibleUid: hasResponsible ? responsibleUid : "",
         responsibleName: hasResponsible ? responsibleUser.name : "",
         disponibleParaAutoasignacion: !hasResponsible,
 
@@ -1208,6 +1350,7 @@ async function handleNewTaskSubmit(event) {
     try {
         if (taskId) {
             await savePlanningTaskChanges(taskId, task);
+            window.alert("Tarea actualizada.");
         } else {
             await createPlanningTask(task);
         }
@@ -1553,6 +1696,11 @@ async function handlePlanningClaimTask(taskId, event) {
   await claimPlanningTaskAction(taskId);
 }
 
+async function handlePlanningAdminTakeAndFinish(taskId, event) {
+  if (event) event.stopPropagation();
+  await adminTakeAndFinishPlanningTaskAction(taskId);
+}
+
 async function handlePlanningDuplicateTask(taskId, event) {
   if (event) {
     event.stopPropagation();
@@ -1775,6 +1923,7 @@ function getPlanningTimelineTypeLabel(type) {
     comment: "Comentario",
     duplicate: "Duplicada",
     self_assigned: "Autoasignación",
+    admin_take_and_finish: "Tomar y terminar",
     delete: "Eliminación"
   };
 
@@ -1831,7 +1980,23 @@ function renderPlanningExecutionMeta(task) {
     details.push(`Termino real: ${task.fechaTerminoReal}`);
   }
 
+  const duration = getPlanningDurationLabel(task);
+  if (duration) {
+    details.push(`Duración: ${duration}`);
+  }
+
   return details.map(detail => `<span>${detail}</span>`).join("");
+}
+
+function getPlanningDurationLabel(task) {
+  if (!task?.inicioReal || !task?.fechaTerminoReal) return "";
+
+  const start = new Date(task.inicioReal);
+  const end = new Date(task.fechaTerminoReal);
+  const minutes = Math.floor((end.getTime() - start.getTime()) / 60000);
+
+  if (Number.isNaN(minutes) || minutes < 0) return "";
+  return minutes === 0 ? "0 min" : `${minutes} min`;
 }
 
 function normalizePlanningStatus(status) {

@@ -47,7 +47,7 @@ const PLANNING_PRODUCTION_ORDERS = [
   }
 ];
 
-let PLANNING_TASKS = [
+const PLANNING_MOCK_TASKS = [
   {
     id: "TASK-001",
     semana: "Semana actual",
@@ -140,6 +140,10 @@ let PLANNING_TASKS = [
   }
 ];
 
+const PLANNING_USE_MOCKS = window.PLANNING_USE_MOCKS === true;
+let PLANNING_TASKS = PLANNING_USE_MOCKS ? PLANNING_MOCK_TASKS.map(task => ({ ...task })) : [];
+let PLANNING_DATA_ERROR = null;
+
 function getPlanningTasks() {
   return PLANNING_TASKS;
 }
@@ -222,7 +226,7 @@ function calculatePlanningKPIs(tasks) {
     if (status === "pendiente") kpis.pendientes++;
     if (status === "en proceso") kpis.enProceso++;
     if (status === "pausada") kpis.pausadas++;
-    if (status === "terminado" || status === "terminada") kpis.terminadas++;
+    if (isPlanningTaskCompleted(task)) kpis.terminadas++;
     if (status === "reprogramado" || status === "reprogramada") kpis.reprogramadas++;
   });
 
@@ -349,6 +353,86 @@ function filterPlanningTasks(tasks, filters) {
   });
 }
 
+function isPlanningTaskCompleted(task) {
+  const status = normalizePlanningStatusValue(task?.estado);
+  return status === "terminado" || status === "terminada";
+}
+
+function getPlanningTaskCompletionDate(task) {
+  const candidates = [
+    task?.fechaTerminoReal,
+    task?.terminadoAt,
+    task?.completedAt
+  ];
+
+  for (const value of candidates) {
+    const date = parsePlanningCompletionDate(value);
+    if (date) return date;
+  }
+
+  return null;
+}
+
+function getIsoWeekKeyFromPlanningDate(value) {
+  const date = parsePlanningCompletionDate(value);
+  if (!date) return "";
+
+  return `${getISOWeekYear(date)}-W${String(getISOWeekNumber(date)).padStart(2, "0")}`;
+}
+
+function parsePlanningCompletionDate(value) {
+  if (!value) return null;
+
+  if (typeof value?.toDate === "function") {
+    const timestampDate = value.toDate();
+    return Number.isNaN(timestampDate?.getTime?.()) ? null : timestampDate;
+  }
+
+  if (value instanceof Date) {
+    return Number.isNaN(value.getTime()) ? null : value;
+  }
+
+  const text = String(value).trim();
+  if (!text) return null;
+
+  if (/^\d{4}-\d{2}-\d{2}$/.test(text)) {
+    const [year, month, day] = text.split("-").map(Number);
+    return createPlanningCalendarDate(year, month, day);
+  }
+
+  if (/^\d{4}-\d{2}-\d{2}T/.test(text)) {
+    const date = new Date(text);
+    return Number.isNaN(date.getTime()) ? null : date;
+  }
+
+  const parts = text.split(/[/-]/);
+  if (parts.length === 3) {
+    const [day, month, rawYear] = parts.map(Number);
+    const year = rawYear < 100 ? rawYear + 2000 : rawYear;
+    return createPlanningCalendarDate(year, month, day);
+  }
+
+  return null;
+}
+
+function createPlanningCalendarDate(year, month, day) {
+  const date = new Date(year, month - 1, day);
+  return date.getFullYear() === year && date.getMonth() === month - 1 && date.getDate() === day
+    ? date
+    : null;
+}
+
+function setPlanningDataError(error) {
+  PLANNING_DATA_ERROR = error
+    ? { code: error.code || "unknown", message: error.message || "No se pudieron cargar las tareas." }
+    : null;
+  return PLANNING_DATA_ERROR;
+}
+
+function getPlanningDataError() {
+  return PLANNING_DATA_ERROR;
+}
+
 function hasPlanningTaskResponsible(task) {
   return Boolean(task?.responsableId || task?.responsibleUid || getPlanningTaskResponsibleName(task));
 }
@@ -360,12 +444,106 @@ function isPlanningTaskAvailableForSelfAssignment(task) {
     task?.disponibleParaAutoasignacion !== false;
 }
 
+function canAdminTakeAndFinishPlanningTask(task, currentUser) {
+  return getPlanningNormalizedRole(currentUser) === "admin" &&
+    currentUser?.active === true &&
+    Boolean(getPlanningUserUid(currentUser)) &&
+    isPlanningTaskAvailableForSelfAssignment(task);
+}
+
+function getPlanningUserUid(user) {
+  return String(user?.uid || user?.id || user?.userId || "").trim();
+}
+
+function getPlanningTaskOwnerUid(task) {
+  return String(task?.responsableId ?? task?.responsibleUid ?? task?.assignedBy ?? "").trim();
+}
+
+function getPlanningNormalizedRole(user) {
+  return String(user?.role || "").trim().toLowerCase();
+}
+
+function validatePlanningDateRange(startDate, targetDate) {
+  if (!isPlanningIsoCalendarDate(startDate) || !isPlanningIsoCalendarDate(targetDate)) {
+    return "Debes indicar ambas fechas planificadas válidas en formato YYYY-MM-DD.";
+  }
+
+  if (targetDate < startDate) {
+    return "La fecha objetivo no puede ser anterior a la fecha de inicio.";
+  }
+
+  return "";
+}
+
+function isPlanningIsoCalendarDate(value) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+
+  const [year, month, day] = value.split("-").map(Number);
+  const date = new Date(Date.UTC(year, month - 1, day));
+
+  return date.getUTCFullYear() === year &&
+    date.getUTCMonth() === month - 1 &&
+    date.getUTCDate() === day;
+}
+
+function canCurrentOperatorEditPlanningDates(task, currentUser) {
+  const currentUserId = getPlanningUserUid(currentUser);
+  const taskOwnerId = getPlanningTaskOwnerUid(task);
+  const role = getPlanningNormalizedRole(currentUser);
+  const active = currentUser?.active === true;
+  const assignable = currentUser?.assignable === true;
+  const ownerMatch = taskOwnerId === currentUserId;
+  const pending = normalizePlanningStatusValue(task?.estado) === "pendiente";
+  const deleted = task?.deleted === true;
+  const alreadyEdited = task?.operatorPlanningDatesEdited === true;
+  const finalResult = role === "operator" &&
+    active &&
+    assignable &&
+    Boolean(currentUserId) &&
+    !deleted &&
+    pending &&
+    ownerMatch &&
+    !alreadyEdited;
+
+  return finalResult;
+}
+
+function applyOperatorPlanningDatesOnce(taskId, dates, currentUser) {
+  let updatedTask = null;
+  const userName = currentUser?.name || currentUser?.email || "Usuario";
+
+  PLANNING_TASKS = PLANNING_TASKS.map(task => {
+    if (task.id !== taskId) return task;
+
+    updatedTask = {
+      ...task,
+      fechaInicioPlanificada: dates.fechaInicioPlanificada,
+      fechaObjetivo: dates.fechaObjetivo,
+      operatorPlanningDatesEdited: true,
+      operatorPlanningDatesEditedBy: getPlanningUserUid(currentUser),
+      updatedBy: getPlanningUserUid(currentUser),
+      timelineLocal: [
+        ...(task.timelineLocal || []),
+        {
+          ...createPlanningTimelineEvent("operator_planning_dates_set", `${userName} definió las fechas planificadas de la tarea.`),
+          user: userName
+        }
+      ]
+    };
+
+    return updatedTask;
+  });
+
+  return updatedTask;
+}
+
 function getPlanningUnassignedTasks(tasks) {
   return (tasks || []).filter(isPlanningTaskAvailableForSelfAssignment);
 }
 
 function applyPlanningSelfAssignment(taskId, user) {
   let updatedTask = null;
+  const userId = getPlanningUserUid(user);
   const userName = user?.name || user?.email || "Usuario";
 
   PLANNING_TASKS = PLANNING_TASKS.map(task => {
@@ -373,19 +551,75 @@ function applyPlanningSelfAssignment(taskId, user) {
 
     updatedTask = {
       ...task,
-      responsableId: user.id,
+      responsableId: userId,
       responsableNombre: userName,
-      responsibleUid: user.id,
+      responsibleUid: userId,
       responsibleName: userName,
       responsableTaller: userName,
       responsableEmail: user.email || "",
       disponibleParaAutoasignacion: false,
       assignmentMode: "self",
-      assignedBy: user.id,
+      assignedBy: userId,
+      updatedBy: userId,
       timelineLocal: [...(task.timelineLocal || []), {
         ...createPlanningTimelineEvent("self_assigned", `${userName} tomó la tarea desde la bolsa de tareas disponibles.`),
         user: userName
       }]
+    };
+
+    return updatedTask;
+  });
+
+  return updatedTask;
+}
+
+function applyAdminTakeAndFinishPlanningTask(taskId, user, completedTask) {
+  let updatedTask = null;
+  const userId = getPlanningUserUid(user);
+  const userName = user?.name || user?.email || "Administrador";
+  const persistedTask = typeof completedTask === "object" && completedTask !== null ? completedTask : {};
+  const timestamp = typeof completedTask === "string"
+    ? completedTask
+    : persistedTask.inicioReal || persistedTask.fechaTerminoReal || persistedTask.terminadoAt || new Date().toISOString();
+
+  PLANNING_TASKS = PLANNING_TASKS.map(task => {
+    if (task.id !== taskId) return task;
+
+    updatedTask = {
+      ...task,
+      responsableId: userId,
+      responsableNombre: userName,
+      responsibleUid: userId,
+      responsibleName: userName,
+      responsableTaller: userName,
+      responsableEmail: user?.email || "",
+      assignedAt: timestamp,
+      assignedBy: userId,
+      assignmentMode: "admin_take_and_finish",
+      disponibleParaAutoasignacion: false,
+      estado: persistedTask.estado || "Terminado",
+      inicioReal: timestamp,
+      fechaTerminoReal: persistedTask.fechaTerminoReal || timestamp,
+      terminadoAt: persistedTask.terminadoAt || timestamp,
+      terminadoBy: userId,
+      updatedAt: timestamp,
+      updatedBy: userId,
+      executionLog: [...(task.executionLog || []), { action: "admin_take_and_finish", date: timestamp }],
+      timelineLocal: [
+        ...(task.timelineLocal || []),
+        {
+          ...createPlanningTimelineEvent("admin_take_and_finish", `${userName} tomó y terminó la tarea directamente.`, timestamp),
+          user: userName,
+          userId,
+          previousResponsible: "",
+          nextResponsible: userName,
+          previousStatus: task.estado || "Pendiente",
+          nextStatus: persistedTask.estado || "Terminado",
+          assignmentMode: "admin_take_and_finish",
+          inicioReal: timestamp,
+          fechaTerminoReal: timestamp
+        }
+      ]
     };
 
     return updatedTask;
@@ -464,7 +698,7 @@ function buildDuplicatedPlanningTask(sourceTask) {
   };
 }
 
-function updatePlanningTask(taskId, task) {
+function updatePlanningTask(taskId, task, actorName = "Sistema") {
   let updatedTask = null;
 
   PLANNING_TASKS = PLANNING_TASKS.map(existingTask => {
@@ -472,12 +706,29 @@ function updatePlanningTask(taskId, task) {
       return existingTask;
     }
 
+    const previousResponsible = getPlanningTaskResponsibleName(existingTask) || "Sin responsable";
+    const nextResponsible = getPlanningTaskResponsibleName({ ...existingTask, ...task }) || "Sin responsable";
+    const previousStatus = existingTask.estado || "Sin estado";
+    const nextStatus = task.estado || previousStatus;
+    const changes = [];
+
+    if (previousResponsible !== nextResponsible) {
+      changes.push(`Responsable: ${previousResponsible} → ${nextResponsible}`);
+    }
+
+    if (previousStatus !== nextStatus) {
+      changes.push(`Estado: ${previousStatus} → ${nextStatus}`);
+    }
+
     updatedTask = {
       ...existingTask,
       ...task,
       timelineLocal: [
         ...(existingTask.timelineLocal || []),
-        createPlanningTimelineEvent("edit", "Tarea editada")
+        {
+          ...createPlanningTimelineEvent("edit", changes.length ? `Tarea editada. ${changes.join(". ")}` : "Tarea editada"),
+          user: actorName
+        }
       ]
     };
 

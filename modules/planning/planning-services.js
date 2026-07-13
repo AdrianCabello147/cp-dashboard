@@ -7,8 +7,12 @@ import {
     getAssignableUsers,
     getTimeline,
     updateTask,
-    claimPlanningTask as claimPlanningTaskInFirestore
-} from "../../auth/firestore.js?v=2026-07-13-planning-unassigned-pool-v1";
+    claimPlanningTask as claimPlanningTaskInFirestore,
+    adminTakeAndFinishPlanningTask as adminTakeAndFinishPlanningTaskInFirestore,
+    saveOperatorPlanningDatesOnce as saveOperatorPlanningDatesOnceInFirestore,
+    getPlanningUserUid,
+    validatePlanningDateRange as validatePlanningDateRangeInFirestore
+} from "../../auth/firestore.js?v=2026-07-13-planning-workflow-v6";
 
 const PLANNING_FIRESTORE_TIMEOUT_MS = 10000;
 
@@ -107,6 +111,45 @@ export async function claimPlanningTask(taskId, currentUser) {
     return withPlanningFirestoreTimeout(
         claimPlanningTaskInFirestore(taskId, currentUser),
         "Timeout tomando tarea de Planificación"
+    );
+}
+
+export async function adminTakeAndFinishPlanningTask(taskId, currentUser) {
+    const currentUserId = getPlanningUserUid(currentUser);
+    const currentUserRole = String(currentUser?.role || "").trim().toLowerCase();
+
+    if (!taskId || !currentUserId || currentUserRole !== "admin" || currentUser?.active !== true) {
+        const error = new Error("No tienes permisos para realizar esta acción.");
+        error.code = "planning/admin-take-and-finish-not-allowed";
+        throw error;
+    }
+
+    return withPlanningFirestoreTimeout(
+        adminTakeAndFinishPlanningTaskInFirestore(taskId, currentUser),
+        "Timeout tomando y terminando tarea de Planificación"
+    );
+}
+
+export async function saveOperatorPlanningDatesOnce(taskId, dates, currentUser) {
+    const currentUserId = getPlanningUserUid(currentUser);
+    const currentUserRole = String(currentUser?.role || "").trim().toLowerCase();
+    const validationMessage = validatePlanningDateRangeInFirestore(dates?.fechaInicioPlanificada, dates?.fechaObjetivo);
+
+    if (!taskId || currentUserRole !== "operator" || currentUser?.active !== true || currentUser?.assignable !== true || !currentUserId) {
+        const error = new Error("No tienes permisos para editar estas fechas.");
+        error.code = "planning/operator-dates-not-allowed";
+        throw error;
+    }
+
+    if (validationMessage) {
+        const error = new Error(validationMessage);
+        error.code = "planning/operator-dates-invalid";
+        throw error;
+    }
+
+    return withPlanningFirestoreTimeout(
+        saveOperatorPlanningDatesOnceInFirestore(taskId, dates, currentUser),
+        "Timeout guardando fechas planificadas"
     );
 }
 
@@ -372,6 +415,8 @@ window.loadPlanningResponsibleUsers = loadPlanningResponsibleUsers;
 window.savePlanningTask = savePlanningTask;
 window.updatePlanningTaskData = updatePlanningTaskData;
 window.claimPlanningTask = claimPlanningTask;
+window.adminTakeAndFinishPlanningTask = adminTakeAndFinishPlanningTask;
+window.saveOperatorPlanningDatesOnce = saveOperatorPlanningDatesOnce;
 window.loadPlanningTaskComments = loadPlanningTaskComments;
 window.savePlanningTaskComment = savePlanningTaskComment;
 window.savePlanningTimelineEvent = savePlanningTimelineEvent;

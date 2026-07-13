@@ -2086,6 +2086,57 @@ body{
     background: linear-gradient(180deg, #f5fbff 0%, #ffffff 100%);
 }
 
+.planning-unassigned-toggle {
+    align-items: center;
+    background: transparent;
+    border: 0;
+    border-radius: 12px;
+    color: inherit;
+    cursor: pointer;
+    display: grid;
+    gap: 12px;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    padding: 4px 0;
+    text-align: left;
+    width: 100%;
+}
+
+.planning-unassigned-toggle:hover { background: #eef8ff; }
+.planning-unassigned-toggle:focus-visible { outline: 3px solid #84caff; outline-offset: 3px; }
+.planning-unassigned-chevron { color: #175cd3; font-size: .9rem; }
+.planning-unassigned-copy { display: grid; gap: 3px; }
+.planning-unassigned-copy strong { color: #101828; font-size: 1rem; }
+.planning-unassigned-copy small { color: #667085; font-size: .84rem; }
+.planning-unassigned-count { color: #175cd3; font-size: .84rem; font-weight: 800; white-space: nowrap; }
+
+#planningUnassignedPoolContent { margin-top: 14px; }
+
+@media (max-width: 640px) {
+    .planning-unassigned-toggle { align-items: start; grid-template-columns: auto minmax(0, 1fr); }
+    .planning-unassigned-count { grid-column: 2; }
+}
+
+.planning-load-error {
+    align-items: center;
+    background: #fff4ed;
+    border: 1px solid #fecdca;
+    border-left: 5px solid #f04438;
+    border-radius: 12px;
+    color: #7a271a;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    justify-content: space-between;
+    margin: 18px 0;
+    padding: 14px 16px;
+}
+
+.planning-load-error div { display: grid; gap: 3px; }
+.planning-load-error span { font-size: .82rem; font-weight: 700; }
+.planning-load-error p { margin: 0; flex: 1 1 280px; }
+
+.modal-card-compact { max-width: 620px; }
+
 .planning-unassigned-list {
     display: grid;
     gap: 14px;
@@ -2107,6 +2158,22 @@ body{
 .planning-claim-btn {
     margin-top: 14px;
     width: 100%;
+}
+
+.planning-pool-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 14px;
+}
+
+.planning-pool-actions .planning-claim-btn {
+    margin-top: 0;
+}
+
+.danger-btn {
+    border-color: #fecdca;
+    color: #b42318;
 }
 
 .task-card-actions {
@@ -2150,6 +2217,17 @@ body{
 
 .task-secondary-actions .task-action-btn:hover {
     background: #eef2f6;
+}
+
+.planning-admin-finish-btn {
+    border-color: #b8a46a;
+    background: #fff9e8;
+    color: #66520d;
+}
+
+.planning-admin-finish-btn:hover {
+    border-color: #90751d;
+    background: #fff2c9;
 }
 /* Production list: reuses portal cards/buttons while keeping wide operational data scrollable. */
 .production-filters { display: grid; grid-template-columns: repeat(5, minmax(145px, 1fr)); gap: 12px; margin: 18px 0; }

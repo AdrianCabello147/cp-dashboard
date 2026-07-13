@@ -1,6 +1,6 @@
-import { FEATURES } from "./features.js?v=2026-07-13-planning-unassigned-pool-v1";
+import { FEATURES } from "./features.js?v=2026-07-13-planning-workflow-v6";
 
-const APP_VERSION = window.APP_VERSION || "2026-07-13-planning-unassigned-pool-v1";
+const APP_VERSION = window.APP_VERSION || "2026-07-13-planning-workflow-v6";
 const PRODUCTION_ALLOWED_USERS = ["acabello@alte.cl"];
 
 function isProductionUserAllowed() {
