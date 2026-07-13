@@ -2081,6 +2081,34 @@ body{
     display: none !important;
 }
 
+.planning-unassigned-pool {
+    border-color: #b9e6fe;
+    background: linear-gradient(180deg, #f5fbff 0%, #ffffff 100%);
+}
+
+.planning-unassigned-list {
+    display: grid;
+    gap: 14px;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+}
+
+.planning-pool-task {
+    margin: 0;
+}
+
+.planning-pool-comment {
+    color: #475467;
+    font-size: .9rem;
+    line-height: 1.4;
+    margin: 12px 0 0;
+    white-space: pre-wrap;
+}
+
+.planning-claim-btn {
+    margin-top: 14px;
+    width: 100%;
+}
+
 .task-card-actions {
     display: flex;
     align-items: center;

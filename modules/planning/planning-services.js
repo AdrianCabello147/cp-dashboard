@@ -6,7 +6,8 @@ import {
     getAllTasks,
     getAssignableUsers,
     getTimeline,
-    updateTask
+    updateTask,
+    claimPlanningTask as claimPlanningTaskInFirestore
 } from "../../auth/firestore.js";
 
 const PLANNING_FIRESTORE_TIMEOUT_MS = 10000;
@@ -100,6 +101,13 @@ export async function updatePlanningTaskData(taskId, task) {
         id: taskId
     };
 
+}
+
+export async function claimPlanningTask(taskId, currentUser) {
+    return withPlanningFirestoreTimeout(
+        claimPlanningTaskInFirestore(taskId, currentUser),
+        "Timeout tomando tarea de Planificación"
+    );
 }
 
 export async function loadPlanningTaskComments(taskId) {
@@ -363,6 +371,7 @@ window.loadPlanningTasks = loadPlanningTasks;
 window.loadPlanningResponsibleUsers = loadPlanningResponsibleUsers;
 window.savePlanningTask = savePlanningTask;
 window.updatePlanningTaskData = updatePlanningTaskData;
+window.claimPlanningTask = claimPlanningTask;
 window.loadPlanningTaskComments = loadPlanningTaskComments;
 window.savePlanningTaskComment = savePlanningTaskComment;
 window.savePlanningTimelineEvent = savePlanningTimelineEvent;

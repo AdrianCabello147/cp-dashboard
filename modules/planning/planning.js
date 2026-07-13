@@ -75,6 +75,33 @@ async function executePlanningTaskAction(taskId, action) {
     refreshPlanningBoard();
 }
 
+async function claimPlanningTaskAction(taskId) {
+    const currentUser = window.currentUserProfile;
+
+    if (!currentUser?.id || currentUser.active !== true || currentUser.assignable !== true) {
+        window.alert("No tienes permisos para tomar esta tarea.");
+        return;
+    }
+
+    if (!window.confirm("¿Tomar esta tarea y asignarla a tu usuario?")) return;
+
+    try {
+        const claimedTask = await claimPlanningTask(taskId, currentUser);
+        applyPlanningSelfAssignment(taskId, currentUser);
+        refreshPlanningBoard();
+        window.alert("La tarea fue asignada a tu usuario.");
+        return claimedTask;
+    } catch (error) {
+        console.warn("No se pudo tomar la tarea de Planificación.", error);
+        await loadPlanningTasksFromDataSource();
+        refreshPlanningBoard();
+        window.alert(error?.code === "planning/task-already-claimed"
+            ? "Esta tarea ya fue tomada por otro usuario."
+            : "No se pudo tomar la tarea. Revisa conexión o permisos.");
+        return null;
+    }
+}
+
 async function duplicatePlanningTaskAction(taskId) {
     if (!canCurrentUserModifyPlanningTasks()) {
         console.warn("Acción no permitida");

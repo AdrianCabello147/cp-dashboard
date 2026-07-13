@@ -12,6 +12,7 @@ import {
     query,
     where,
     orderBy,
+    runTransaction,
     serverTimestamp
 } from "https://www.gstatic.com/firebasejs/12.15.0/firebase-firestore.js";
 
@@ -157,6 +158,72 @@ export async function updateTask(id, data) {
 
     await updateDoc(doc(db, "tasks", id), data);
 
+}
+
+export async function claimPlanningTask(taskId, currentUser) {
+    if (!taskId || !currentUser?.id || currentUser.active !== true || currentUser.assignable !== true) {
+        const error = new Error("No tienes permisos para tomar esta tarea.");
+        error.code = "planning/claim-not-allowed";
+        throw error;
+    }
+
+    const taskRef = doc(db, "tasks", taskId);
+    const timelineRef = doc(TIMELINE);
+    const userName = currentUser.name || currentUser.email || "Usuario";
+
+    return runTransaction(db, async transaction => {
+        const snapshot = await transaction.get(taskRef);
+
+        if (!snapshot.exists()) {
+            const error = new Error("La tarea ya no existe.");
+            error.code = "planning/task-not-found";
+            throw error;
+        }
+
+        const task = snapshot.data();
+        const hasResponsible = Boolean(task.responsableId || task.responsibleUid || task.responsableNombre || task.responsibleName || task.responsableTaller || task.responsible);
+        const isPending = (task.estado || "").trim().toLowerCase() === "pendiente";
+
+        if (task.deleted === true || !isPending || hasResponsible || task.disponibleParaAutoasignacion === false) {
+            const error = new Error("Esta tarea ya fue tomada por otro usuario.");
+            error.code = "planning/task-already-claimed";
+            throw error;
+        }
+
+        const update = {
+            responsableId: currentUser.id,
+            responsableNombre: userName,
+            responsibleUid: currentUser.id,
+            responsibleName: userName,
+            responsableTaller: userName,
+            responsableEmail: currentUser.email || "",
+            assignedAt: serverTimestamp(),
+            assignedBy: currentUser.id,
+            assignmentMode: "self",
+            disponibleParaAutoasignacion: false,
+            updatedAt: serverTimestamp(),
+            updatedBy: currentUser.id
+        };
+
+        transaction.update(taskRef, update);
+        transaction.set(timelineRef, {
+            module: "planning",
+            code: taskId,
+            action: "self_assigned",
+            comment: `${userName} tomó la tarea desde la bolsa de tareas disponibles.`,
+            taskId,
+            userId: currentUser.id,
+            userName,
+            previousStatus: task.estado || "",
+            nextStatus: task.estado || "Pendiente",
+            previousResponsible: task.responsableNombre || task.responsibleName || task.responsableTaller || "",
+            nextResponsible: userName,
+            assignmentMode: "self",
+            createdAt: serverTimestamp()
+        });
+
+        return { id: taskId, ...task, ...update, estado: task.estado || "Pendiente" };
+    });
 }
 
 export async function deleteTask(id) {

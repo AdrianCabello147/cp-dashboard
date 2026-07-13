@@ -319,7 +319,9 @@ function filterPlanningTasks(tasks, filters) {
     const responsible = normalizePlanningFilterValue(getPlanningTaskResponsibleName(task));
 
     const matchesResponsible = !filters.responsable ||
-      responsible === normalizePlanningFilterValue(filters.responsable);
+      (filters.responsable === "__unassigned__"
+        ? !hasPlanningTaskResponsible(task)
+        : responsible === normalizePlanningFilterValue(filters.responsable));
 
     const matchesStatus = !filters.estado ||
       status === normalizePlanningFilterValue(filters.estado);
@@ -345,6 +347,51 @@ function filterPlanningTasks(tasks, filters) {
       matchesComplexity &&
       matchesSearch;
   });
+}
+
+function hasPlanningTaskResponsible(task) {
+  return Boolean(task?.responsableId || task?.responsibleUid || getPlanningTaskResponsibleName(task));
+}
+
+function isPlanningTaskAvailableForSelfAssignment(task) {
+  return task?.deleted !== true &&
+    normalizePlanningStatusValue(task?.estado) === "pendiente" &&
+    !hasPlanningTaskResponsible(task) &&
+    task?.disponibleParaAutoasignacion !== false;
+}
+
+function getPlanningUnassignedTasks(tasks) {
+  return (tasks || []).filter(isPlanningTaskAvailableForSelfAssignment);
+}
+
+function applyPlanningSelfAssignment(taskId, user) {
+  let updatedTask = null;
+  const userName = user?.name || user?.email || "Usuario";
+
+  PLANNING_TASKS = PLANNING_TASKS.map(task => {
+    if (task.id !== taskId) return task;
+
+    updatedTask = {
+      ...task,
+      responsableId: user.id,
+      responsableNombre: userName,
+      responsibleUid: user.id,
+      responsibleName: userName,
+      responsableTaller: userName,
+      responsableEmail: user.email || "",
+      disponibleParaAutoasignacion: false,
+      assignmentMode: "self",
+      assignedBy: user.id,
+      timelineLocal: [...(task.timelineLocal || []), {
+        ...createPlanningTimelineEvent("self_assigned", `${userName} tomó la tarea desde la bolsa de tareas disponibles.`),
+        user: userName
+      }]
+    };
+
+    return updatedTask;
+  });
+
+  return updatedTask;
 }
 
 function addPlanningTask(task) {
@@ -654,5 +701,5 @@ function groupPlanningTasksByUser(tasks) {
 }
 
 function getPlanningTaskResponsibleName(task) {
-  return task.responsibleName || task.responsableTaller || task.responsible || "";
+  return task.responsableNombre || task.responsibleName || task.responsableTaller || task.responsible || "";
 }

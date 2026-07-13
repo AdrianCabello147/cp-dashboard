@@ -79,9 +79,10 @@ function renderPlanningModule(tasks) {
   const operationalTasks = tasks.filter(task => !isPlanningTaskFinished(task));
   const completedTasks = tasks.filter(task => isPlanningTaskFinished(task));
   const filteredTasks = filterPlanningTasks(operationalTasks, PLANNING_FILTERS);
-  const groupedTasks = groupPlanningTasksByUser(filteredTasks);
+  const poolTasks = getPlanningUnassignedTasks(filteredTasks);
+  const groupedTasks = groupPlanningTasksByUser(filteredTasks.filter(task => !isPlanningTaskAvailableForSelfAssignment(task)));
   const kpis = calculatePlanningKPIs(tasks);
-  const weeklyTasks = getPlanningTasksForCurrentISOWeek(operationalTasks);
+  const weeklyTasks = getPlanningTasksForCurrentISOWeek(operationalTasks.filter(task => !isPlanningTaskAvailableForSelfAssignment(task)));
   const currentISOWeek = getCurrentPlanningISOWeek();
   ensurePlanningCompletedSummaryWeek(completedTasks);
 
@@ -105,6 +106,8 @@ function renderPlanningModule(tasks) {
     ${renderPlanningFilters()}
 
     ${renderPlanningFilterSummary(operationalTasks.length, filteredTasks.length)}
+
+    ${renderPlanningUnassignedTaskPool(poolTasks)}
 
     ${filteredTasks.length > 0 ? renderPlanningAccordionControls("board", Object.keys(groupedTasks)) : ""}
 
@@ -398,6 +401,7 @@ function renderPlanningFilters() {
         Responsable
         <select onchange="updatePlanningFilter('responsable', this.value)">
           ${renderPlanningFilterOption("", "Todos", PLANNING_FILTERS.responsable)}
+          ${renderPlanningFilterOption("__unassigned__", "Sin responsable", PLANNING_FILTERS.responsable)}
           ${getPlanningResponsibleNames().map(user => renderPlanningFilterOption(user, user, PLANNING_FILTERS.responsable)).join("")}
         </select>
       </label>
@@ -843,6 +847,11 @@ function canCurrentUserModifyPlanningTasks() {
   return window.currentUserProfile?.role === "admin";
 }
 
+function canCurrentUserClaimPlanningTask() {
+  const user = window.currentUserProfile;
+  return Boolean(user?.id && user.active === true && user.assignable === true && ["admin", "operator"].includes(user.role));
+}
+
 function canCurrentUserDeletePlanningTasks() {
   return canCurrentUserModifyPlanningTasks();
 }
@@ -1047,6 +1056,32 @@ function renderNewTaskModal() {
   `;
 }
 
+function renderPlanningUnassignedTaskPool(tasks) {
+  return `
+    <section class="planning-weekly planning-unassigned-pool">
+      <div class="planning-weekly-header"><div><h3>Bolsa de tareas disponibles</h3><p>Tareas pendientes sin responsable que pueden ser tomadas por el equipo.</p></div><span>${tasks.length} tareas disponibles</span></div>
+      ${tasks.length === 0 ? `<div class="planning-weekly-empty">No hay tareas disponibles para autoasignación.</div>` : `<div class="planning-unassigned-list">${tasks.map(renderPlanningUnassignedTask).join("")}</div>`}
+    </section>`;
+}
+
+function renderPlanningUnassignedTask(task) {
+  const canClaim = canCurrentUserClaimPlanningTask() && isPlanningTaskAvailableForSelfAssignment(task);
+  const createdAt = formatPlanningPoolDate(task.createdAt || task.fechaCreacion);
+  return `<article class="task-card planning-pool-task ${getPlanningPriorityClass(task.prioridad)} ${getPlanningCardStatusClass(task.estado)}">
+    <div class="task-card-header"><div class="task-title-block"><strong>${escapePlanningHtml(task.actividad || "Sin actividad")}</strong><span>${escapePlanningHtml(getPlanningTaskCode(task) || "Sin código")}</span></div><span class="task-status ${getPlanningStatusClass(task.estado)}">${escapePlanningHtml(getPlanningStatusLabel(task.estado))}</span></div>
+    <p class="task-context">${escapePlanningHtml(task.cliente || "Sin cliente")} · ${escapePlanningHtml(task.otPsi || "Sin OT / PSI")}</p>
+    <div class="task-meta"><span>Tipo: ${escapePlanningHtml(task.tipo || "Sin tipo")}</span><span>Prioridad: ${escapePlanningHtml(task.prioridad || "Normal")} · Complejidad: ${escapePlanningHtml(task.complejidad || "Sin definir")} · Puntos: ${escapePlanningHtml(getPlanningTaskComplexityPoints(task))}</span><span>Inicio planificado: ${escapePlanningHtml(task.fechaInicioPlanificada || "Sin fecha")}</span><span>Objetivo: ${escapePlanningHtml(task.fechaObjetivo || "Sin fecha")}</span>${renderPlanningDeviationReasonMeta(task)}<span>Creada: ${escapePlanningHtml(createdAt || "No informada")}</span></div>
+    ${task.comentario ? `<p class="planning-pool-comment">${escapePlanningHtml(task.comentario)}</p>` : ""}
+    ${canClaim ? `<button type="button" class="primary-btn planning-claim-btn" onclick="handlePlanningClaimTask('${escapePlanningAttribute(task.id)}', event)">Tomar tarea</button>` : ""}
+  </article>`;
+}
+
+function formatPlanningPoolDate(value) {
+  if (!value) return "";
+  const date = typeof value.toDate === "function" ? value.toDate() : value instanceof Date ? value : new Date(value);
+  return Number.isNaN(date.getTime()) ? value.toString() : date.toLocaleString("es-CL", { dateStyle: "short", timeStyle: "short" });
+}
+
 function renderPlanningActivityOptions() {
   return PLANNING_ACTIVITY_GROUPS.map(group => `
                 <optgroup label="${escapePlanningAttribute(group.label)}">
@@ -1136,6 +1171,7 @@ async function handleNewTaskSubmit(event) {
 
     setPlanningTaskSavingState(true);
 
+    const hasResponsible = Boolean(responsibleUser.uid && responsibleUser.name);
     const task = {
 
         actividad,
@@ -1144,9 +1180,12 @@ async function handleNewTaskSubmit(event) {
         productionOrder: formData.get("productionOrder") || "",
         cliente: formData.get("cliente") || "",
 
-        responsableTaller: responsibleUser.name,
-        responsibleUid: responsibleUser.uid,
-        responsibleName: responsibleUser.name,
+        responsableTaller: hasResponsible ? responsibleUser.name : "",
+        responsableId: hasResponsible ? responsibleUser.uid : "",
+        responsableNombre: hasResponsible ? responsibleUser.name : "",
+        responsibleUid: hasResponsible ? responsibleUser.uid : "",
+        responsibleName: hasResponsible ? responsibleUser.name : "",
+        disponibleParaAutoasignacion: !hasResponsible,
 
         tipo: formData.get("tipo") || "",
 
@@ -1190,10 +1229,6 @@ function validatePlanningTaskForm(form, formData, responsibleUser, actividad) {
 
   if (!actividad) {
     return "Especifica la actividad.";
-  }
-
-  if (!responsibleUser.uid || !responsibleUser.name) {
-    return "Selecciona un responsable.";
   }
 
   if (!formData.get("tipo")) {
@@ -1298,7 +1333,7 @@ function setPlanningModalMode(mode) {
 }
 
 function renderPlanningResponsibleOptions(selectedUid = "") {
-  const placeholder = `<option value="" disabled ${selectedUid ? "" : "selected"}>Seleccionar</option>`;
+  const placeholder = `<option value="" ${selectedUid ? "" : "selected"}>Sin responsable — dejar en bolsa de tareas</option>`;
   const options = getPlanningResponsibleUsers().map(user => `
     <option value="${escapePlanningAttribute(user.uid)}" ${user.uid === selectedUid ? "selected" : ""}>
       ${escapePlanningHtml(user.name)}
@@ -1511,6 +1546,11 @@ async function handlePlanningExecutionAction(taskId, action, event) {
   }
 
   await executePlanningTaskAction(taskId, action);
+}
+
+async function handlePlanningClaimTask(taskId, event) {
+  if (event) event.stopPropagation();
+  await claimPlanningTaskAction(taskId);
 }
 
 async function handlePlanningDuplicateTask(taskId, event) {
@@ -1734,6 +1774,7 @@ function getPlanningTimelineTypeLabel(type) {
     finish: "Término",
     comment: "Comentario",
     duplicate: "Duplicada",
+    self_assigned: "Autoasignación",
     delete: "Eliminación"
   };
 
