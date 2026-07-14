@@ -100,7 +100,7 @@ test('automatic planning start date uses the Chile calendar and preserves every 
 });
 
 test('Planning module graph uses one cache version and named Firestore exports exist', () => {
-  const version = '2026-07-13-planning-final-ui-audit-v1';
+  const version = '2026-07-14-planning-weekly-admin-cache-v1';
   const requiredExports = ['createTask', 'updateTask', 'getAllTasks', 'getAssignableUsers', 'addComment', 'getComments', 'addTimelineEvent', 'getTimeline', 'claimPlanningTask'];
   const planningImports = ['addComment', 'addTimelineEvent', 'createTask', 'getComments', 'getAllTasks', 'getAssignableUsers', 'getTimeline', 'updateTask'];
 

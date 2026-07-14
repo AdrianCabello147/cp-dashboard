@@ -16,7 +16,7 @@ import {
     getPlanningUserUid,
     getPlanningUserDisplayName,
     validatePlanningDateRange as validatePlanningDateRangeInFirestore
-} from "../../auth/firestore.js?v=2026-07-13-planning-final-ui-audit-v1";
+} from "../../auth/firestore.js?v=2026-07-14-planning-weekly-admin-cache-v1";
 
 const PLANNING_FIRESTORE_TIMEOUT_MS = 10000;
 
