@@ -210,6 +210,24 @@ export function getPlanningTaskOwnerUid(task) {
     return String(task?.responsableId ?? task?.responsibleUid ?? task?.assignedBy ?? "").trim();
 }
 
+export function canCurrentUserExecutePlanningTask(task, currentUser, action) {
+    const userId = getPlanningUserUid(currentUser);
+    const role = String(currentUser?.role || "").trim().toLowerCase();
+    const status = String(task?.estado || "").trim().toLowerCase().replace(/\s+/g, " ");
+    const allowedStatuses = {
+        start: ["pendiente"],
+        pause: ["en proceso"],
+        resume: ["pausada"],
+        finish: ["en proceso", "pausada"]
+    };
+
+    if (!userId || currentUser?.active !== true || !task || task.deleted === true || !allowedStatuses[action]?.includes(status)) {
+        return false;
+    }
+    if (role === "admin") return true;
+    return role === "operator" && getPlanningTaskOwnerUid(task) === userId;
+}
+
 export function validatePlanningDateRange(startDate, targetDate) {
     if (!isPlanningIsoCalendarDate(startDate) || !isPlanningIsoCalendarDate(targetDate)) {
         return "Debes indicar ambas fechas planificadas válidas en formato YYYY-MM-DD.";
@@ -352,6 +370,9 @@ export async function claimPlanningTask(taskId, currentUser) {
 }
 
 export async function finishPlanningTask(taskId, currentUser) {
+    return executePlanningTaskAction(taskId, "finish", currentUser);
+
+    /* Legacy implementation retained only as source history during local consolidation.
     const currentUserId = getPlanningUserUid(currentUser);
 
     if (!taskId || !currentUserId) {
@@ -410,6 +431,7 @@ export async function finishPlanningTask(taskId, currentUser) {
 
         return { id: taskId, ...task, ...update, updatedAt: completedAt };
     });
+    */
 }
 
 export async function executePlanningTaskAction(taskId, action, currentUser) {
@@ -418,7 +440,8 @@ export async function executePlanningTaskAction(taskId, action, currentUser) {
     const transitions = {
         start: { from: "pendiente", to: "En proceso", comment: "Tarea iniciada" },
         pause: { from: "en proceso", to: "Pausada", comment: "Tarea pausada" },
-        resume: { from: "pausada", to: "En proceso", comment: "Tarea reanudada" }
+        resume: { from: "pausada", to: "En proceso", comment: "Tarea reanudada" },
+        finish: { from: ["en proceso", "pausada"], to: "Terminado", comment: "Tarea terminada" }
     };
     const transition = transitions[action];
 
@@ -440,9 +463,7 @@ export async function executePlanningTaskAction(taskId, action, currentUser) {
         }
 
         const task = snapshot.data();
-        const currentStatus = String(task.estado || "").trim().toLowerCase();
-        const taskOwnerId = getPlanningTaskOwnerUid(task);
-        if (task.deleted === true || taskOwnerId !== currentUserId || currentStatus !== transition.from) {
+        if (!canCurrentUserExecutePlanningTask(task, currentUser, action)) {
             const error = new Error("La tarea ya no está disponible para esta acción.");
             error.code = "planning/execution-invalid-state";
             throw error;
@@ -464,6 +485,12 @@ export async function executePlanningTaskAction(taskId, action, currentUser) {
         }
         if (action === "pause") update.pausas = [...(task.pausas || []), actionInstant];
         if (action === "resume") update.reanudaciones = [...(task.reanudaciones || []), actionInstant];
+        if (action === "finish") {
+            update.inicioReal = task.inicioReal || actionInstant;
+            update.fechaTerminoReal = actionInstant;
+            update.terminadoAt = actionInstant;
+            update.terminadoBy = currentUserId;
+        }
 
         transaction.update(taskRef, update);
         transaction.set(timelineRef, {

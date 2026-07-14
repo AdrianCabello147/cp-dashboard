@@ -516,7 +516,7 @@ test('completed task status, completion date, ISO week, and local merge share on
     fechaTerminoReal: completedAt,
     terminadoAt: completedAt,
     assignmentMode: 'admin_take_and_finish',
-    responsableNombre: 'Responsable terminado'
+    responsableNombre: 'Adrián'
   };
 
   assert.equal(localContext.isPlanningTaskCompleted(task), true);
@@ -550,9 +550,9 @@ test('operator finish persists one canonical completion contract and timeline tr
   assert.match(finishSource, /terminadoBy: currentUserId/);
   assert.match(finishSource, /updatedAt: serverTimestamp\(\)/);
   assert.match(finishSource, /updatedBy: currentUserId/);
-  assert.match(planningServices, /finishPlanningTask as finishPlanningTaskInFirestore/);
-  assert.match(planning, /const completedTask = await finishPlanningTask\(taskId, currentUser\)/);
-  assert.match(planning, /applyFinishedPlanningTask\(taskId, completedTask, currentUser\)/);
+  assert.match(planningServices, /executePlanningTaskAction as executePlanningTaskActionInFirestore/);
+  assert.match(planning, /const persistedTask = await executePlanningTaskActionInFirestore\(taskId, action, currentUser\)/);
+  assert.match(planning, /applyPersistedPlanningExecutionTask\(taskId, action, persistedTask, currentUser\)/);
 });
 
 test('operator finish merges persisted dates locally into the ISO weekly completed summary', () => {
@@ -725,10 +725,9 @@ test('new timeline events preserve the authenticated actor without a fixed fallb
   uiContext.renderPlanningTimelineList({ actividad: 'Prueba', timelineLocal: [normalized] });
   assert.match(timelineList.innerHTML, /Santiago Chacón/);
 
-  const forbiddenPersonalFallback = `Adri${'án'}`;
-  assert.doesNotMatch(engine, new RegExp(`user:\\s*["']${forbiddenPersonalFallback}["']`));
-  assert.doesNotMatch(planningServices, new RegExp(`user:\\s*["']${forbiddenPersonalFallback}["']`));
-  assert.doesNotMatch(planningUi, new RegExp(`event\\.user \\|\\| "${forbiddenPersonalFallback}"`));
+  assert.doesNotMatch(engine, /user:\s*["']Adrián["']/);
+  assert.doesNotMatch(planningServices, /user:\s*["']Adrián["']/);
+  assert.doesNotMatch(planningUi, /event\.user \|\| "Adrián"/);
   assert.match(planningServices, /user: getPlanningTimelineActorName\(event, "Sistema"\)/);
   assert.match(planningUi, /getPlanningTimelineActorName\(event, "Sistema"\)/);
 });
@@ -865,4 +864,68 @@ test('completed task creation shows the contextual message and keeps the expecte
   assert.match(planning, /"Fecha término real": formatPlanningExportDate\(task\.fechaTerminoReal \|\| task\.terminadoAt/);
   assert.match(planning, /"Duración": getPlanningDurationLabel\(task\)/);
   assert.match(planning, /"Modo asignación": task\.assignmentMode/);
+});
+
+test('weekly planning uses canonical UID, status, and planned-date rules for every responsible', () => {
+  const localContext = createPlanningEngineContext();
+  localContext.setPlanningResponsibleUsers([
+    { uid: 'david-uid', name: 'David Salas' },
+    { uid: 'juan-uid', name: 'Juan Carlos Almendras' },
+    { uid: 'santiago-uid', name: 'Santiago ChacÃ³n' }
+  ]);
+  const week = '2026-W29';
+  const tasks = [
+    { id: 'david-pending', estado: ' Pendiente ', responsableId: 'david-uid', fechaInicioPlanificada: '2026-07-13' },
+    { id: 'david-progress', estado: ' EN PROCESO ', responsibleUid: 'david-uid', fechaInicioPlanificada: '2026-07-14', fechaObjetivo: '' },
+    { id: 'juan-progress-1', estado: 'En proceso', assignedBy: 'juan-uid', fechaObjetivo: '2026-07-15' },
+    { id: 'juan-progress-2', estado: 'En proceso', responsableId: 'juan-uid', fechaInicioPlanificada: '2026-07-16' },
+    { id: 'santiago-pending', estado: 'Pendiente', responsableId: 'santiago-uid', fechaInicioPlanificada: '2026-07-17' },
+    { id: 'santiago-paused', estado: 'Pausada', responsableId: 'santiago-uid', fechaInicioPlanificada: '2026-07-17' },
+    { id: 'santiago-done-1', estado: 'Terminado', responsableId: 'santiago-uid', fechaTerminoReal: '2026-07-17T12:00:00.000Z' },
+    { id: 'santiago-done-2', estado: 'Terminada', responsableId: 'santiago-uid', completedAt: '2026-07-18T12:00:00.000Z' },
+    { id: 'without-date', estado: 'En proceso', responsableId: 'david-uid' },
+    { id: 'deleted', estado: 'En proceso', responsableId: 'david-uid', fechaInicioPlanificada: '2026-07-14', deleted: true },
+    { id: 'other-module', estado: 'En proceso', responsableId: 'david-uid', fechaInicioPlanificada: '2026-07-14', module: 'production' }
+  ];
+
+  assert.deepEqual(localContext.getPlanningTasksForIsoWeek(tasks, week).map(task => task.id), [
+    'david-pending', 'david-progress', 'juan-progress-1', 'juan-progress-2', 'santiago-pending', 'santiago-paused', 'santiago-done-1', 'santiago-done-2'
+  ]);
+  assert.equal(localContext.getPlanningTaskIsoWeekKey(tasks[8]), '');
+  assert.equal(JSON.stringify(localContext.getPlanningWeeklyStatusCountsForResponsible(tasks, 'David Salas', week)), JSON.stringify({
+    pendientes: 1, enProceso: 1, pausadas: 0, terminadas: 0, reprogramadas: 0
+  }));
+  assert.equal(JSON.stringify(localContext.getPlanningWeeklyStatusCountsForResponsible(tasks, 'juan-uid', week)), JSON.stringify({
+    pendientes: 0, enProceso: 2, pausadas: 0, terminadas: 0, reprogramadas: 0
+  }));
+  assert.equal(JSON.stringify(localContext.getPlanningWeeklyStatusCountsForResponsible(tasks, 'Santiago ChacÃ³n', week)), JSON.stringify({
+    pendientes: 1, enProceso: 0, pausadas: 1, terminadas: 2, reprogramadas: 0
+  }));
+  const grouped = localContext.groupPlanningTasksByUser(tasks.slice(0, 8));
+  assert.equal(grouped['David Salas'].length, 2);
+  assert.equal(grouped['Juan Carlos Almendras'].length, 2);
+  assert.equal(grouped['Santiago ChacÃ³n'].length, 4);
+});
+
+test('admin executes other operators tasks without changing ownership while operators remain scoped', () => {
+  const localContext = createPlanningUiContext();
+  const davidTask = { id: 'david-task', estado: 'Pendiente', responsableId: 'david-uid', responsableNombre: 'David Salas', deleted: false };
+  const admin = { uid: 'admin-uid', role: 'admin', active: true, assignable: false, name: 'Administrador' };
+  const david = { uid: 'david-uid', role: 'operator', active: true, name: 'David Salas' };
+  const otherOperator = { uid: 'juan-uid', role: 'operator', active: true, name: 'Juan Carlos Almendras' };
+
+  assert.equal(localContext.canCurrentUserExecutePlanningTask(davidTask, admin, 'start'), true);
+  assert.equal(localContext.canCurrentUserExecutePlanningTask(davidTask, david, 'start'), true);
+  assert.equal(localContext.canCurrentUserExecutePlanningTask(davidTask, otherOperator, 'start'), false);
+  assert.equal(localContext.canCurrentUserExecutePlanningTask(davidTask, { ...admin, active: false }, 'start'), false);
+  assert.equal(localContext.canCurrentUserExecutePlanningTask(davidTask, { ...admin, role: 'viewer' }, 'start'), false);
+  assert.equal(localContext.canCurrentUserExecutePlanningTask({ ...davidTask, estado: 'En proceso' }, admin, 'start'), false);
+  assert.equal(localContext.canCurrentUserExecutePlanningTask(davidTask, admin, 'pause'), false);
+  assert.equal(localContext.canCurrentUserExecutePlanningTask({ ...davidTask, estado: 'Pausada' }, admin, 'resume'), true);
+  assert.equal(localContext.canCurrentUserExecutePlanningTask({ ...davidTask, estado: 'En proceso' }, admin, 'finish'), true);
+  assert.match(planningUi, /getPlanningExecutionActions\(task, window\.currentUserProfile\)/);
+  assert.match(planning, /executePlanningTaskActionInFirestore\(taskId, action, currentUser\)/);
+  assert.match(firestore, /if \(role === "admin"\) return true/);
+  assert.match(firestore, /terminadoBy = currentUserId/);
+  assert.doesNotMatch(firestore.slice(firestore.indexOf('export async function executePlanningTaskAction'), firestore.indexOf('export async function adminTakeAndFinishPlanningTask')), /responsableId:\s*currentUserId/);
 });

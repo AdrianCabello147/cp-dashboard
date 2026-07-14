@@ -304,25 +304,45 @@ function getPlanningTasksForCurrentISOWeek(tasks) {
 }
 
 function getPlanningTasksForIsoWeek(tasks, weekKey) {
-  return (tasks || []).filter(task => {
-    const taskWeek = isPlanningTaskCompleted(task)
-      ? getIsoWeekKeyFromPlanningDate(getPlanningTaskCompletionDate(task))
-      : getIsoWeekKeyFromPlanningDate(parsePlanningDate(task.fechaObjetivo));
+  return (tasks || []).filter(task =>
+    isPlanningTaskInPlanningModule(task) &&
+    task?.deleted !== true &&
+    getPlanningTaskIsoWeekKey(task) === weekKey
+  );
+}
 
-    return taskWeek === weekKey;
-  });
+function getPlanningTaskIsoWeekKey(task) {
+  if (isPlanningTaskCompleted(task)) {
+    return getIsoWeekKeyFromPlanningDate(getPlanningTaskCompletionDate(task));
+  }
+
+  return getIsoWeekKeyFromPlanningDate(getPlanningActiveTaskPlannedDate(task));
+}
+
+function getPlanningActiveTaskPlannedDate(task) {
+  return parsePlanningDate(task?.fechaInicioPlanificada) || parsePlanningDate(task?.fechaObjetivo);
+}
+
+function isPlanningTaskInPlanningModule(task) {
+  const moduleName = normalizePlanningFilterValue(task?.module);
+  return !moduleName || moduleName === "planning" || moduleName === "planificacion";
 }
 
 function getPlanningWeeklyStatusCountsForResponsible(tasks, responsibleIdOrName, weekKey) {
   const requested = String(responsibleIdOrName || "").trim();
   const normalizedRequested = normalizePlanningFilterValue(requested);
-  const requestedProfile = getPlanningResponsibleUsers().find(user => getPlanningUserUid(user) === requested);
+  const requestedProfile = getPlanningResponsibleUsers().find(user =>
+    getPlanningUserUid(user) === requested ||
+    normalizePlanningFilterValue(getPlanningUserDisplayName(user, "")) === normalizedRequested
+  );
+  const requestedUid = getPlanningUserUid(requestedProfile);
   const normalizedRequestedName = normalizePlanningFilterValue(getPlanningUserDisplayName(requestedProfile, ""));
   const matchingTasks = getPlanningTasksForIsoWeek(tasks, weekKey).filter(task => {
     const responsibleId = getPlanningTaskResponsibleUid(task);
     const normalizedResponsibleName = normalizePlanningFilterValue(getPlanningTaskResponsibleName(task));
 
-    return requested === responsibleId ||
+    return (requestedUid && requestedUid === responsibleId) ||
+      requested === responsibleId ||
       normalizedRequested === normalizedResponsibleName ||
       (normalizedRequestedName && normalizedRequestedName === normalizedResponsibleName);
   });
@@ -488,6 +508,24 @@ function getPlanningUserDisplayName(user, fallback = "Usuario") {
 
 function getPlanningTaskResponsibleUid(task) {
   return String(task?.responsableId || task?.responsibleUid || task?.assignedBy || "").trim();
+}
+
+function canCurrentUserExecutePlanningTask(task, currentUser, action) {
+  const userId = getPlanningUserUid(currentUser);
+  const role = getPlanningNormalizedRole(currentUser);
+  const status = normalizePlanningStatusValue(task?.estado);
+  const allowedStatuses = {
+    start: ["pendiente"],
+    pause: ["en proceso"],
+    resume: ["pausada"],
+    finish: ["en proceso", "pausada"]
+  };
+
+  if (!userId || currentUser?.active !== true || !task || task.deleted === true || !allowedStatuses[action]?.includes(status)) {
+    return false;
+  }
+  if (role === "admin") return true;
+  return role === "operator" && getPlanningTaskResponsibleUid(task) === userId;
 }
 
 function getPlanningTimelineActorName(event, fallback = "Sistema") {
@@ -1060,7 +1098,14 @@ function getPlanningExecutionEventDescription(action) {
 }
 
 function normalizePlanningStatusValue(status) {
-  return (status || "").toLowerCase();
+  const value = String(status || "").trim().toLowerCase().replace(/\s+/g, " ");
+  const aliases = {
+    "en-proceso": "en proceso",
+    "en_proceso": "en proceso",
+    "terminada": "terminado",
+    "reprogramada": "reprogramado"
+  };
+  return aliases[value] || value;
 }
 
 function normalizePlanningFilterValue(value) {
@@ -1129,12 +1174,12 @@ function getISOWeekYear(date) {
 function groupPlanningTasksByUser(tasks) {
   const grouped = {};
 
-  getPlanningResponsibleNames().forEach(user => {
-    grouped[user] = [];
+  getPlanningResponsibleUsers().forEach(user => {
+    grouped[getPlanningUserDisplayName(user)] = [];
   });
 
   tasks.forEach(task => {
-    const responsable = getPlanningTaskResponsibleName(task) || "Sin responsable";
+    const responsable = getPlanningTaskResponsibleGroupName(task) || "Sin responsable";
 
     if (!grouped[responsable]) {
       grouped[responsable] = [];
@@ -1148,9 +1193,15 @@ function groupPlanningTasksByUser(tasks) {
 
 function getPlanningTaskResponsibleName(task) {
   const explicitName = task?.responsableNombre || task?.responsibleName || task?.responsableTaller || task?.responsible;
-  if (explicitName) return explicitName;
+  if (String(explicitName || "").trim()) return String(explicitName).trim();
 
   const responsibleId = getPlanningTaskResponsibleUid(task);
   const profile = getPlanningResponsibleUsers().find(user => getPlanningUserUid(user) === responsibleId);
   return profile ? getPlanningUserDisplayName(profile, "") : "";
+}
+
+function getPlanningTaskResponsibleGroupName(task) {
+  const responsibleId = getPlanningTaskResponsibleUid(task);
+  const profile = getPlanningResponsibleUsers().find(user => getPlanningUserUid(user) === responsibleId);
+  return profile ? getPlanningUserDisplayName(profile, "") : getPlanningTaskResponsibleName(task);
 }

@@ -103,14 +103,6 @@ async function savePlanningTaskChanges(taskId, task) {
 }
 
 async function executePlanningTaskAction(taskId, action) {
-    if (action === "finish") {
-        const currentUser = window.currentUserProfile;
-        const completedTask = await finishPlanningTask(taskId, currentUser);
-        applyFinishedPlanningTask(taskId, completedTask, currentUser);
-        refreshPlanningBoard();
-        return completedTask;
-    }
-
     const currentUser = window.currentUserProfile;
     const persistedTask = await executePlanningTaskActionInFirestore(taskId, action, currentUser);
     applyPersistedPlanningExecutionTask(taskId, action, persistedTask, currentUser);

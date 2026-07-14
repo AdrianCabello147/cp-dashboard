@@ -90,6 +90,12 @@ function renderPlanningModule(tasks) {
     operationalTasks.filter(task => !isPlanningTaskAvailableForSelfAssignment(task)),
     currentISOWeekKey
   );
+  const unscheduledActiveTasks = operationalTasks.filter(task =>
+    !isPlanningTaskAvailableForSelfAssignment(task) &&
+    task.deleted !== true &&
+    isPlanningTaskInPlanningModule(task) &&
+    !getPlanningTaskIsoWeekKey(task)
+  );
   const weeklyCompletedTasks = getPlanningTasksForIsoWeek(completedTasks, currentISOWeekKey);
   const currentISOWeek = getCurrentPlanningISOWeek();
   ensurePlanningCompletedSummaryWeek(completedTasks);
@@ -111,7 +117,7 @@ function renderPlanningModule(tasks) {
 
     ${renderPlanningKPIs(kpis)}
 
-    ${renderPlanningWeeklySection(weeklyTasks, currentISOWeek, weeklyCompletedTasks, currentISOWeekKey)}
+    ${renderPlanningWeeklySection(weeklyTasks, currentISOWeek, weeklyCompletedTasks, currentISOWeekKey, unscheduledActiveTasks)}
 
     ${renderPlanningFilters()}
 
@@ -164,7 +170,7 @@ function renderPlanningDeviationReasonMeta(task) {
   return `<span>Motivo desviación: ${escapePlanningHtml(reason)}</span>`;
 }
 
-function renderPlanningWeeklySection(tasks, isoWeek, completedTasks = [], weekKey = getCurrentPlanningISOWeekKey()) {
+function renderPlanningWeeklySection(tasks, isoWeek, completedTasks = [], weekKey = getCurrentPlanningISOWeekKey(), unscheduledActiveTasks = []) {
   const weeklyTasks = [...tasks, ...completedTasks];
   const groupedTasks = groupPlanningTasksByUser(tasks);
   const groupedWeeklyTasks = groupPlanningTasksByUser(weeklyTasks);
@@ -195,6 +201,11 @@ function renderPlanningWeeklySection(tasks, isoWeek, completedTasks = [], weekKe
             </div>
           `
       }
+      ${unscheduledActiveTasks.length > 0 ? `
+        <div class="planning-weekly-empty">
+          ${unscheduledActiveTasks.length} tarea${unscheduledActiveTasks.length === 1 ? "" : "s"} activa${unscheduledActiveTasks.length === 1 ? "" : "s"} sin fecha planificada.
+        </div>
+      ` : ""}
     </section>
   `;
 }
@@ -822,7 +833,7 @@ function renderPlanningColumn(user, tasks) {
 function renderPlanningCard(task) {
   const priorityClass = getPlanningPriorityClass(task.prioridad);
   const statusClass = getPlanningStatusClass(task.estado);
-  const executionActions = getPlanningExecutionActions(task.estado);
+  const executionActions = getPlanningExecutionActions(task, window.currentUserProfile);
 
   return `
       <div
@@ -1787,6 +1798,11 @@ async function handlePlanningExecutionAction(taskId, action, event) {
     event.stopPropagation();
   }
 
+  const task = getPlanningTasks().find(item => item.id === taskId);
+  if (!canCurrentUserExecutePlanningTask(task, window.currentUserProfile, action)) {
+    window.alert("No tienes permisos para ejecutar esta acción.");
+    return;
+  }
   await executePlanningTaskAction(taskId, action);
 }
 
@@ -2029,33 +2045,31 @@ function getPlanningTimelineTypeLabel(type) {
   return labels[type] || type || "Evento";
 }
 
-function getPlanningExecutionActions(status) {
-  const normalizedStatus = normalizePlanningStatus(status);
-
+function getPlanningExecutionActions(task, currentUser) {
   return [
     {
       id: "start",
       label: "Iniciar",
       className: "start",
-      disabled: normalizedStatus !== "pendiente"
+      disabled: !canCurrentUserExecutePlanningTask(task, currentUser, "start")
     },
     {
       id: "pause",
       label: "Pausar",
       className: "pause",
-      disabled: normalizedStatus !== "en proceso"
+      disabled: !canCurrentUserExecutePlanningTask(task, currentUser, "pause")
     },
     {
       id: "resume",
       label: "Reanudar",
       className: "resume",
-      disabled: normalizedStatus !== "pausada"
+      disabled: !canCurrentUserExecutePlanningTask(task, currentUser, "resume")
     },
     {
       id: "finish",
       label: "Terminar",
       className: "finish",
-      disabled: !["en proceso", "pausada"].includes(normalizedStatus)
+      disabled: !canCurrentUserExecutePlanningTask(task, currentUser, "finish")
     }
   ];
 }
@@ -2099,7 +2113,7 @@ function getPlanningDurationLabel(task) {
 }
 
 function normalizePlanningStatus(status) {
-  return (status || "").toLowerCase();
+  return normalizePlanningStatusValue(status);
 }
 
 function getPlanningStatusLabel(status) {
