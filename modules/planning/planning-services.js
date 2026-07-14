@@ -2,13 +2,21 @@ import {
     addComment,
     addTimelineEvent,
     createTask,
+    createPlanningTaskWithTimeline,
+    executePlanningTaskAction as executePlanningTaskActionInFirestore,
     getComments,
     getAllTasks,
     getAssignableUsers,
     getTimeline,
     updateTask,
-    claimPlanningTask as claimPlanningTaskInFirestore
-} from "../../auth/firestore.js";
+    claimPlanningTask as claimPlanningTaskInFirestore,
+    finishPlanningTask as finishPlanningTaskInFirestore,
+    adminTakeAndFinishPlanningTask as adminTakeAndFinishPlanningTaskInFirestore,
+    saveOperatorPlanningDatesOnce as saveOperatorPlanningDatesOnceInFirestore,
+    getPlanningUserUid,
+    getPlanningUserDisplayName,
+    validatePlanningDateRange as validatePlanningDateRangeInFirestore
+} from "../../auth/firestore.js?v=2026-07-13-planning-final-ui-audit-v1";
 
 const PLANNING_FIRESTORE_TIMEOUT_MS = 10000;
 
@@ -53,24 +61,20 @@ export async function loadPlanningResponsibleUsers() {
 
 }
 
-export async function savePlanningTask(task) {
+export async function savePlanningTask(task, currentUser = null) {
 
     const taskData = preparePlanningTaskForFirestore(task);
 
     console.log("[Planning][Firestore] Antes de crear tarea en Firestore", taskData);
 
     try {
-        const docRef = await withPlanningFirestoreTimeout(
-            createTask(taskData),
+        const savedTask = await withPlanningFirestoreTimeout(
+            createPlanningTaskWithTimeline(taskData, currentUser),
             "Timeout creando tarea de Planificación en Firestore"
         );
 
-        console.log("[Planning][Firestore] Después de crear tarea en Firestore", docRef.id);
-
-        return {
-            ...taskData,
-            id: docRef.id
-        };
+        console.log("[Planning][Firestore] Después de crear tarea en Firestore", savedTask.id);
+        return savedTask;
     } catch (error) {
         console.error("[Planning][Firestore] Error creando tarea en Firestore", error);
         throw error;
@@ -110,6 +114,59 @@ export async function claimPlanningTask(taskId, currentUser) {
     );
 }
 
+export async function finishPlanningTask(taskId, currentUser) {
+    return withPlanningFirestoreTimeout(
+        finishPlanningTaskInFirestore(taskId, currentUser),
+        "Timeout terminando tarea de Planificación"
+    );
+}
+
+export async function executePlanningTaskAction(taskId, action, currentUser) {
+    return withPlanningFirestoreTimeout(
+        executePlanningTaskActionInFirestore(taskId, action, currentUser),
+        "Timeout ejecutando acción de Planificación"
+    );
+}
+
+export async function adminTakeAndFinishPlanningTask(taskId, currentUser) {
+    const currentUserId = getPlanningUserUid(currentUser);
+    const currentUserRole = String(currentUser?.role || "").trim().toLowerCase();
+
+    if (!taskId || !currentUserId || currentUserRole !== "admin" || currentUser?.active !== true) {
+        const error = new Error("No tienes permisos para realizar esta acción.");
+        error.code = "planning/admin-take-and-finish-not-allowed";
+        throw error;
+    }
+
+    return withPlanningFirestoreTimeout(
+        adminTakeAndFinishPlanningTaskInFirestore(taskId, currentUser),
+        "Timeout tomando y terminando tarea de Planificación"
+    );
+}
+
+export async function saveOperatorPlanningDatesOnce(taskId, dates, currentUser) {
+    const currentUserId = getPlanningUserUid(currentUser);
+    const currentUserRole = String(currentUser?.role || "").trim().toLowerCase();
+    const validationMessage = validatePlanningDateRangeInFirestore(dates?.fechaInicioPlanificada, dates?.fechaObjetivo);
+
+    if (!taskId || currentUserRole !== "operator" || currentUser?.active !== true || currentUser?.assignable !== true || !currentUserId) {
+        const error = new Error("No tienes permisos para editar estas fechas.");
+        error.code = "planning/operator-dates-not-allowed";
+        throw error;
+    }
+
+    if (validationMessage) {
+        const error = new Error(validationMessage);
+        error.code = "planning/operator-dates-invalid";
+        throw error;
+    }
+
+    return withPlanningFirestoreTimeout(
+        saveOperatorPlanningDatesOnceInFirestore(taskId, dates, currentUser),
+        "Timeout guardando fechas planificadas"
+    );
+}
+
 export async function loadPlanningTaskComments(taskId) {
 
     console.log("[Planning][Firestore] Antes de cargar comentarios desde Firestore", taskId);
@@ -130,12 +187,13 @@ export async function loadPlanningTaskComments(taskId) {
 
 }
 
-export async function savePlanningTaskComment(taskId, text) {
+export async function savePlanningTaskComment(taskId, text, currentUser = null) {
 
     const commentData = {
         taskId,
         text,
-        user: "Adrián"
+        user: getPlanningUserDisplayName(currentUser),
+        userId: getPlanningUserUid(currentUser)
     };
 
     console.log("[Planning][Firestore] Antes de crear comentario en Firestore", commentData);
@@ -165,10 +223,13 @@ export async function savePlanningTimelineEvent(taskId, event) {
     const eventData = {
         module: "planning",
         code: taskId,
+        taskId,
+        planningCode: event.planningCode || "",
         action: event.type,
         comment: event.description,
-        createdAt: event.date,
-        user: event.user || "Sistema"
+        userId: event.userId || "",
+        userName: event.userName || event.user || "",
+        user: getPlanningTimelineActorName(event, "Sistema")
     };
 
     console.log("[Planning][Firestore] Antes de crear evento timeline en Firestore", eventData);
@@ -237,7 +298,8 @@ function normalizePlanningCommentFromFirestore(comment) {
         id: comment.id || "",
         taskId: comment.taskId || "",
         text: comment.text || "",
-        user: comment.user || "Adrián",
+        user: comment.user || comment.userName || "Usuario",
+        userId: comment.userId || "",
         createdAt: comment.createdAt || null,
         date: formatPlanningCommentDate(comment.createdAt)
     };
@@ -275,7 +337,11 @@ function normalizePlanningTimelineEventFromFirestore(event) {
         description: event.comment || "",
         date: formatPlanningCommentDate(event.createdAt),
         createdAt: event.createdAt || null,
-        user: event.user || "Sistema"
+        userId: event.userId || "",
+        userName: event.userName || "",
+        taskId: event.taskId || event.code || "",
+        planningCode: event.planningCode || "",
+        user: getPlanningTimelineActorName(event, "Sistema")
     };
 
 }
@@ -372,6 +438,10 @@ window.loadPlanningResponsibleUsers = loadPlanningResponsibleUsers;
 window.savePlanningTask = savePlanningTask;
 window.updatePlanningTaskData = updatePlanningTaskData;
 window.claimPlanningTask = claimPlanningTask;
+window.finishPlanningTask = finishPlanningTask;
+window.executePlanningTaskActionInFirestore = executePlanningTaskAction;
+window.adminTakeAndFinishPlanningTask = adminTakeAndFinishPlanningTask;
+window.saveOperatorPlanningDatesOnce = saveOperatorPlanningDatesOnce;
 window.loadPlanningTaskComments = loadPlanningTaskComments;
 window.savePlanningTaskComment = savePlanningTaskComment;
 window.savePlanningTimelineEvent = savePlanningTimelineEvent;

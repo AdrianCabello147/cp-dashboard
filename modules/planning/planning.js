@@ -2,7 +2,10 @@ async function initPlanning() {
     try {
         await loadPlanningResponsibleUsersFromDataSource();
         await loadPlanningTasksFromDataSource();
+        setPlanningDataError(null);
     } catch (error) {
+        setPlanningDataError(error);
+        console.error("[Planning][load]", getPlanningSafeErrorDetails("load-tasks", "tasks", error));
         console.error("No se pudieron cargar las tareas de Planificación.", error);
     }
 
@@ -24,6 +27,28 @@ function refreshPlanningBoard() {
     renderPlanningModule(tasks);
 }
 
+async function retryPlanningDataLoad() {
+    await initPlanning();
+}
+
+function getPlanningSafeErrorDetails(operation, collection, error, task = null) {
+    const user = window.currentUserProfile;
+    const userUid = getPlanningUserUid(user);
+    return {
+        operation,
+        collection,
+        code: error?.code || "unknown",
+        message: error?.message || "Error no identificado",
+        authenticated: Boolean(userUid),
+        uid: user?.id ? `${user.id.slice(0, 6)}…` : null,
+        role: user?.role || null,
+        active: user?.active === true,
+        assignable: user?.assignable === true,
+        hasResponsible: task ? Boolean(task.responsableId || task.responsibleUid || task.responsableNombre || task.responsibleName) : undefined,
+        availableForSelfAssignment: task ? task.disponibleParaAutoasignacion === true : undefined
+    };
+}
+
 async function loadPlanningTasksFromDataSource() {
     const tasks = await loadPlanningTasks();
     setPlanningTasks(tasks);
@@ -33,13 +58,19 @@ async function loadPlanningTasksFromDataSource() {
 async function createPlanningTask(task) {
     console.log("[Planning] Antes de llamar a Firestore para crear tarea");
 
-    const taskToSave = preparePlanningTaskForSave(task);
-    const savedTask = await savePlanningTask(taskToSave);
+    const taskToSave = prepareNewPlanningTaskForCreation(preparePlanningTaskForSave(task), window.currentUserProfile);
+    let savedTask;
+
+    try {
+        savedTask = await savePlanningTask(taskToSave, window.currentUserProfile);
+    } catch (error) {
+        console.error("[Planning][create]", getPlanningSafeErrorDetails("create-task", "tasks", error, taskToSave));
+        throw error;
+    }
 
     console.log("[Planning] Después de llamar a Firestore para crear tarea", savedTask);
 
-    const localTask = addPlanningTask(savedTask);
-    await persistLatestPlanningTimelineEvent(localTask);
+    const localTask = addPlanningTask(savedTask, window.currentUserProfile);
     refreshPlanningBoard();
 }
 
@@ -50,35 +81,49 @@ async function savePlanningTaskChanges(taskId, task) {
     }
 
     const currentTask = getPlanningTasks().find(item => item.id === taskId);
+    if (!currentTask) return;
+
+    const currentUser = window.currentUserProfile;
     const taskToSave = preparePlanningTaskForSave({
         ...task,
         planningCode: currentTask?.planningCode || task.planningCode
     });
-    const updatedTask = updatePlanningTask(taskId, taskToSave);
 
-    if (updatedTask) {
-        await updatePlanningTaskData(taskId, updatedTask);
-        await persistLatestPlanningTimelineEvent(updatedTask);
+    try {
+        await updatePlanningTaskData(taskId, taskToSave);
+        const updatedTask = updatePlanningTask(taskId, taskToSave, currentUser);
+        if (updatedTask?.timelineLocal?.at(-1)?.type === "edit") {
+            await persistLatestPlanningTimelineEvent(updatedTask);
+        }
+        refreshPlanningBoard();
+    } catch (error) {
+        console.error("[Planning][edit]", getPlanningSafeErrorDetails("update-task", "tasks", error, taskToSave));
+        throw error;
     }
-
-    refreshPlanningBoard();
 }
 
 async function executePlanningTaskAction(taskId, action) {
-    const updatedTask = executePlanningTask(taskId, action);
-
-    if (updatedTask) {
-        await updatePlanningTaskData(taskId, updatedTask);
-        await persistLatestPlanningTimelineEvent(updatedTask);
+    if (action === "finish") {
+        const currentUser = window.currentUserProfile;
+        const completedTask = await finishPlanningTask(taskId, currentUser);
+        applyFinishedPlanningTask(taskId, completedTask, currentUser);
+        refreshPlanningBoard();
+        return completedTask;
     }
 
+    const currentUser = window.currentUserProfile;
+    const persistedTask = await executePlanningTaskActionInFirestore(taskId, action, currentUser);
+    applyPersistedPlanningExecutionTask(taskId, action, persistedTask, currentUser);
     refreshPlanningBoard();
+    return persistedTask;
 }
 
 async function claimPlanningTaskAction(taskId) {
     const currentUser = window.currentUserProfile;
+    const currentUserUid = getPlanningUserUid(currentUser);
+    const currentUserRole = String(currentUser?.role || "").trim().toLowerCase();
 
-    if (!currentUser?.id || currentUser.active !== true || currentUser.assignable !== true) {
+    if (!currentUserUid || currentUser.active !== true || currentUser.assignable !== true || !["admin", "operator"].includes(currentUserRole)) {
         window.alert("No tienes permisos para tomar esta tarea.");
         return;
     }
@@ -87,9 +132,8 @@ async function claimPlanningTaskAction(taskId) {
 
     try {
         const claimedTask = await claimPlanningTask(taskId, currentUser);
-        applyPlanningSelfAssignment(taskId, currentUser);
+        applyPlanningSelfAssignment(taskId, currentUser, claimedTask);
         refreshPlanningBoard();
-        window.alert("La tarea fue asignada a tu usuario.");
         return claimedTask;
     } catch (error) {
         console.warn("No se pudo tomar la tarea de Planificación.", error);
@@ -99,6 +143,64 @@ async function claimPlanningTaskAction(taskId) {
             ? "Esta tarea ya fue tomada por otro usuario."
             : "No se pudo tomar la tarea. Revisa conexión o permisos.");
         return null;
+    }
+}
+
+async function adminTakeAndFinishPlanningTaskAction(taskId) {
+    const currentUser = window.currentUserProfile;
+    const task = getPlanningTasks().find(item => item.id === taskId);
+
+    if (!canAdminTakeAndFinishPlanningTask(task, currentUser)) {
+        window.alert("No tienes permisos para realizar esta acción.");
+        return null;
+    }
+
+    if (!window.confirm("¿Tomar y terminar esta tarea ahora? Se registrará el inicio y término en el mismo momento.")) {
+        return null;
+    }
+
+    try {
+        const completedTask = await adminTakeAndFinishPlanningTask(taskId, currentUser);
+        applyAdminTakeAndFinishPlanningTask(taskId, currentUser, completedTask);
+        refreshPlanningBoard();
+        return completedTask;
+    } catch (error) {
+        console.error("[Planning][admin-take-and-finish]", getPlanningSafeErrorDetails("admin-take-and-finish", "tasks", error, task));
+        const messages = {
+            "planning/task-not-available": "La tarea ya no está disponible.",
+            "planning/admin-take-and-finish-not-pending": "Solo se pueden tomar y terminar tareas pendientes de la Bolsa.",
+            "planning/admin-take-and-finish-not-allowed": "No tienes permisos para realizar esta acción."
+        };
+        window.alert(messages[error?.code] || "No se pudo completar la tarea. Revisa la conexión.");
+        return null;
+    }
+}
+
+async function saveOperatorPlanningDatesOnceAction(taskId, dates) {
+    const currentUser = window.currentUserProfile;
+    const task = getPlanningTasks().find(item => item.id === taskId);
+    const validationMessage = validatePlanningDateRange(dates?.fechaInicioPlanificada, dates?.fechaObjetivo);
+
+    if (!canCurrentOperatorEditPlanningDates(task, currentUser)) {
+        const error = new Error("No tienes permisos para editar estas fechas.");
+        error.code = "planning/operator-dates-not-allowed";
+        throw error;
+    }
+
+    if (validationMessage) {
+        const error = new Error(validationMessage);
+        error.code = "planning/operator-dates-invalid";
+        throw error;
+    }
+
+    try {
+        const savedTask = await saveOperatorPlanningDatesOnce(taskId, dates, currentUser);
+        applyOperatorPlanningDatesOnce(taskId, dates, currentUser);
+        refreshPlanningBoard();
+        return savedTask;
+    } catch (error) {
+        console.error("[Planning][operator-dates]", getPlanningSafeErrorDetails("operator-planning-dates", "tasks", error, task));
+        throw error;
     }
 }
 
@@ -114,10 +216,8 @@ async function duplicatePlanningTaskAction(taskId) {
 
     try {
         const duplicatedTask = buildDuplicatedPlanningTask(sourceTask);
-        const savedTask = await savePlanningTask(duplicatedTask);
-        const localTask = addDuplicatedPlanningTask(savedTask, sourceTask);
-
-        await persistLatestPlanningTimelineEvent(localTask);
+        const savedTask = await savePlanningTask(duplicatedTask, window.currentUserProfile);
+        const localTask = addDuplicatedPlanningTask(savedTask, sourceTask, window.currentUserProfile);
         refreshPlanningBoard();
     } catch (error) {
         console.error("No se pudo duplicar la tarea de Planificación.", error);
@@ -139,19 +239,29 @@ async function deletePlanningTaskAction(taskId) {
     if (!task) return;
 
     try {
+        const currentUser = window.currentUserProfile;
         const deletedTask = {
             ...task,
             deleted: true,
             deletedAt: new Date().toISOString(),
-            deletedBy: "Adrián"
+            deletedBy: getPlanningUserUid(currentUser)
         };
 
         await updatePlanningTaskData(taskId, deletedTask);
-        await persistPlanningTimelineEvent(taskId, createPlanningTimelineEvent("delete", "Tarea eliminada"));
+        await persistPlanningTimelineEvent(taskId, {
+            ...createPlanningTimelineEvent("delete", "Tarea eliminada", new Date().toISOString(), currentUser, {
+                taskId,
+                planningCode: task.planningCode || "",
+                estadoAnterior: task.estado || "",
+                estadoNuevo: task.estado || ""
+            })
+        });
         removePlanningTaskFromBoard(taskId);
         refreshPlanningBoard();
+        window.alert("Tarea eliminada.");
     } catch (error) {
-        console.error("No se pudo eliminar la tarea de Planificación.", error);
+        console.error("[Planning][delete]", getPlanningSafeErrorDetails("delete-task", "tasks", error, task));
+        window.alert("No se pudo eliminar la tarea. Revisa conexión o permisos de Firestore.");
     }
 }
 
@@ -184,7 +294,7 @@ async function exportPlanningToExcel() {
 }
 
 function addPlanningTaskCommentLocal(taskId, text) {
-    addPlanningTaskComment(taskId, text);
+    addPlanningTaskComment(taskId, text, window.currentUserProfile);
     refreshPlanningBoard();
 }
 
@@ -201,8 +311,9 @@ async function loadPlanningCommentsForTask(taskId) {
 }
 
 async function addPlanningTaskCommentPersisted(taskId, text) {
-    const comment = await savePlanningTaskComment(taskId, text);
-    const updatedTask = addPlanningTaskComment(taskId, comment);
+    const currentUser = window.currentUserProfile;
+    const comment = await savePlanningTaskComment(taskId, text, currentUser);
+    const updatedTask = addPlanningTaskComment(taskId, comment, currentUser);
     await persistLatestPlanningTimelineEvent(updatedTask);
     refreshPlanningBoard();
 
@@ -271,6 +382,8 @@ function buildPlanningSheet(tasks) {
         "Fecha objetivo",
         "Fecha inicio real",
         "Fecha término real",
+        "Duración",
+        "Modo asignación",
         "Comentario inicial"
     ];
     const rows = tasks.map(task => ({
@@ -281,15 +394,17 @@ function buildPlanningSheet(tasks) {
         "Cliente": task.cliente || "",
         "Proyecto": task.proyecto || "",
         "Responsable": getPlanningTaskResponsibleName(task),
-        "Estado": task.estado || "",
+        "Estado": isPlanningTaskCompleted(task) ? "Terminado" : (task.estado || ""),
         "Motivo desviación": getPlanningDeviationReasonForExport(task),
         "Prioridad": task.prioridad || "",
         "Complejidad": task.complejidad || "",
         "Puntos": getPlanningTaskComplexityPoints(task),
         "Fecha creación": formatPlanningExportDate(task.createdAt || task.fechaCreacion || ""),
         "Fecha objetivo": task.fechaObjetivo || "",
-        "Fecha inicio real": task.inicioReal || "",
-        "Fecha término real": task.fechaTerminoReal || "",
+        "Fecha inicio real": formatPlanningExportDate(task.inicioReal || ""),
+        "Fecha término real": formatPlanningExportDate(task.fechaTerminoReal || task.terminadoAt || ""),
+        "Duración": getPlanningDurationLabel(task),
+        "Modo asignación": task.assignmentMode || "",
         "Comentario inicial": task.comentario || ""
     }));
 
@@ -309,7 +424,7 @@ function buildPlanningCommentsSheet(tasks) {
         (task.comentariosLocales || []).forEach(comment => {
             rows.push({
                 "Fecha": comment.date || formatPlanningExportDate(comment.createdAt || ""),
-                "Usuario": comment.user || "Adrián",
+                "Usuario": comment.user || "Usuario",
                 "Actividad": task.actividad || "",
                 "Comentario": comment.text || ""
             });
@@ -429,3 +544,4 @@ function isPlanningCode(value) {
 
 document.addEventListener("DOMContentLoaded", initPlanning);
 document.addEventListener("user-profile-loaded", refreshPlanningBoard);
+window.retryPlanningDataLoad = retryPlanningDataLoad;
