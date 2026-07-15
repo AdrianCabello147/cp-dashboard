@@ -432,6 +432,58 @@ test('the real assigned-task card renders operator date action independently fro
   assert.doesNotMatch(uiContext.renderPlanningUnassignedTask(task), /Definir fechas/);
 });
 
+test('assigned-task cards start collapsed and expand independently with accessible controls', () => {
+  const uiContext = createPlanningUiContext();
+  const accordionVersion = '2026-07-15-planning-card-accordion-v1';
+  const task = {
+    id: 'task/accordion-1',
+    planningCode: 'PP-2026-29-003',
+    actividad: 'Ensamble',
+    otPsi: 'OT 11996 / PSI-25-0139',
+    cliente: 'INGESUB',
+    tipo: 'Orden de Trabajo OT',
+    fechaObjetivo: '2026-07-24',
+    prioridad: 'Media',
+    estado: 'Pausada',
+    deleted: false
+  };
+  const initialMarkup = uiContext.renderPlanningCard(task);
+  const toggleMarkup = initialMarkup.match(/<button[\s\S]*?class="task-card-header task-card-toggle"[\s\S]*?<\/button>/)?.[0] || '';
+
+  assert.match(initialMarkup, /aria-expanded="false"/);
+  assert.match(initialMarkup, /aria-controls="planning-task-details-task-2Faccordion-1"/);
+  assert.match(initialMarkup, /aria-hidden="true"/);
+  assert.match(initialMarkup, /\sinert/);
+  assert.match(toggleMarkup, /Ensamble/);
+  assert.match(toggleMarkup, /PP-2026-29-003/);
+  assert.match(toggleMarkup, /Pausada/);
+  assert.doesNotMatch(toggleMarkup, /OT 11996|Comentarios|Timeline|Iniciar/);
+
+  const details = {
+    attributes: {},
+    setAttribute(name, value) { this.attributes[name] = value; },
+    toggleAttribute(name, enabled) { this.attributes[name] = enabled; }
+  };
+  const card = { classList: { toggle() {} } };
+  const toggleButton = {
+    attributes: { 'aria-controls': 'planning-task-details-task-2Faccordion-1' },
+    closest() { return card; },
+    getAttribute(name) { return this.attributes[name]; },
+    setAttribute(name, value) { this.attributes[name] = value; }
+  };
+  uiContext.document = { getElementById: () => details };
+
+  assert.equal(uiContext.togglePlanningCard(task.id, toggleButton), true);
+  assert.equal(toggleButton.attributes['aria-expanded'], 'true');
+  assert.equal(details.attributes['aria-hidden'], 'false');
+  assert.equal(uiContext.isPlanningCardExpanded(task.id), true);
+  assert.equal(uiContext.isPlanningCardExpanded('another-task'), false);
+  assert.match(uiContext.renderPlanningCard(task), /aria-expanded="true"/);
+  assert.match(uiContext.renderPlanningCard({ ...task, id: 'another-task' }), /aria-expanded="false"/);
+  assert.match(index, new RegExp(`style\\.css\\?v=${accordionVersion}`));
+  assert.match(index, new RegExp(`planning-ui\\.js\\?v=${accordionVersion}`));
+});
+
 test('admin can take and finish only an available pool task with one local audit event', () => {
   const localContext = createPlanningEngineContext();
   const admin = { id: 'admin-1', role: ' Admin ', active: true, name: 'Admin PSI', email: 'admin@alte.cl' };

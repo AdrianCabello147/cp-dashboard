@@ -7,7 +7,8 @@ const PLANNING_FILTERS = {
 };
 
 const PLANNING_UI_STATE = {
-  unassignedPoolExpanded: false
+  unassignedPoolExpanded: false,
+  expandedTaskIds: new Set()
 };
 
 const PLANNING_COLLAPSE_STATE = {
@@ -834,68 +835,111 @@ function renderPlanningCard(task) {
   const priorityClass = getPlanningPriorityClass(task.prioridad);
   const statusClass = getPlanningStatusClass(task.estado);
   const executionActions = getPlanningExecutionActions(task, window.currentUserProfile);
+  const isExpanded = isPlanningCardExpanded(task.id);
+  const detailsId = getPlanningCardDetailsId(task.id);
+  const escapedTaskId = escapePlanningAttribute(task.id);
 
   return `
-      <div
-        class="task-card ${priorityClass} ${getPlanningCardStatusClass(task.estado)}"
-        ${renderPlanningEditCardAction(task)}
-        >
-
-      <div class="task-card-header">
+    <article class="task-card ${priorityClass} ${getPlanningCardStatusClass(task.estado)} ${isExpanded ? "is-expanded" : ""}">
+      <button
+        type="button"
+        class="task-card-header task-card-toggle"
+        aria-expanded="${isExpanded}"
+        aria-controls="${detailsId}"
+        onclick="togglePlanningCard('${escapedTaskId}', this)"
+      >
         <div class="task-title-block">
-          <strong>${task.actividad}</strong>
+          <strong>${escapePlanningHtml(task.actividad || "Sin actividad")}</strong>
           <span>${escapePlanningHtml(getPlanningTaskCode(task))}</span>
-          ${task.otPsi ? `<span>${task.otPsi}</span>` : ""}
         </div>
 
         <div class="task-card-actions">
-          <span class="task-status ${statusClass}">${getPlanningStatusLabel(task.estado)}</span>
+          <span class="task-status ${statusClass}">${escapePlanningHtml(getPlanningStatusLabel(task.estado))}</span>
+          <span class="task-card-chevron" aria-hidden="true">&#8250;</span>
+        </div>
+      </button>
+
+      <div
+        id="${detailsId}"
+        class="task-card-details"
+        aria-hidden="${!isExpanded}"
+        ${isExpanded ? "" : "inert"}
+      >
+        <div class="task-card-details-inner">
+          <div class="task-card-details-content">
+            ${task.otPsi ? `<p class="task-reference">${escapePlanningHtml(task.otPsi)}</p>` : ""}
+
+            ${renderPlanningClientProject(task) ? `<p class="task-context">${renderPlanningClientProject(task)}</p>` : ""}
+
+            <div class="task-meta">
+              ${task.tipo ? `<span>${escapePlanningHtml(task.tipo)}</span>` : ""}
+              ${task.fechaObjetivo ? `<span>Objetivo: ${escapePlanningHtml(formatPlanningDisplayDate(task.fechaObjetivo))}</span>` : ""}
+              ${renderPlanningDeviationReasonMeta(task)}
+              <span>Prioridad: ${escapePlanningHtml(task.prioridad || "Normal")}</span>
+              ${renderPlanningExecutionMeta(task)}
+            </div>
+
+            <div class="task-secondary-actions">
+              ${renderPlanningAdminActions(task)}
+              ${renderPlanningOperatorDatesAction(task)}
+              <button type="button" class="task-action-btn" onclick="openPlanningComments('${escapedTaskId}', event)">
+                Comentarios (${getPlanningCommentsCount(task)})
+              </button>
+              <button type="button" class="task-action-btn" onclick="openPlanningTimeline('${escapedTaskId}', event)">
+                Timeline
+              </button>
+            </div>
+
+            <div class="task-execution-actions">
+              ${executionActions.map(action => `
+                <button
+                  type="button"
+                  class="task-execution-btn ${action.className}"
+                  ${action.disabled ? "disabled" : ""}
+                  onclick="handlePlanningExecutionAction('${escapedTaskId}', '${action.id}', event)"
+                >
+                  ${action.label}
+                </button>
+              `).join("")}
+            </div>
+          </div>
         </div>
       </div>
-
-      ${renderPlanningClientProject(task) ? `<p class="task-context">${renderPlanningClientProject(task)}</p>` : ""}
-
-      <div class="task-meta">
-        ${task.tipo ? `<span>${escapePlanningHtml(task.tipo)}</span>` : ""}
-        ${task.fechaObjetivo ? `<span>Objetivo: ${escapePlanningHtml(formatPlanningDisplayDate(task.fechaObjetivo))}</span>` : ""}
-        ${renderPlanningDeviationReasonMeta(task)}
-        <span>Prioridad: ${task.prioridad || "Normal"}</span>
-        ${renderPlanningExecutionMeta(task)}
-      </div>
-
-      <div class="task-secondary-actions">
-        ${renderPlanningAdminActions(task)}
-        ${renderPlanningOperatorDatesAction(task)}
-        <button type="button" class="task-action-btn" onclick="openPlanningComments('${task.id}', event)">
-          Comentarios (${getPlanningCommentsCount(task)})
-        </button>
-        <button type="button" class="task-action-btn" onclick="openPlanningTimeline('${task.id}', event)">
-          Timeline
-        </button>
-      </div>
-
-      <div class="task-execution-actions">
-        ${executionActions.map(action => `
-          <button
-            type="button"
-            class="task-execution-btn ${action.className}"
-            ${action.disabled ? "disabled" : ""}
-            onclick="handlePlanningExecutionAction('${task.id}', '${action.id}', event)"
-          >
-            ${action.label}
-          </button>
-        `).join("")}
-      </div>
-    </div>
+    </article>
   `;
 }
 
-function renderPlanningEditCardAction(task) {
-  if (!canCurrentUserModifyPlanningTasks()) {
-    return "";
+function getPlanningCardDetailsId(taskId) {
+  return `planning-task-details-${encodeURIComponent(String(taskId || "unknown")).replace(/%/g, "-")}`;
+}
+
+function isPlanningCardExpanded(taskId) {
+  return PLANNING_UI_STATE.expandedTaskIds.has(String(taskId));
+}
+
+function togglePlanningCard(taskId, toggleButton) {
+  const normalizedTaskId = String(taskId);
+  const expanded = !isPlanningCardExpanded(normalizedTaskId);
+
+  if (expanded) {
+    PLANNING_UI_STATE.expandedTaskIds.add(normalizedTaskId);
+  } else {
+    PLANNING_UI_STATE.expandedTaskIds.delete(normalizedTaskId);
   }
 
-  return `onclick="editPlanningTask('${task.id}')"`;
+  const card = toggleButton?.closest(".task-card");
+  const detailsId = toggleButton?.getAttribute("aria-controls");
+  const details = detailsId ? document.getElementById(detailsId) : null;
+
+  toggleButton?.setAttribute("aria-expanded", String(expanded));
+  card?.classList.toggle("is-expanded", expanded);
+
+  if (details) {
+    details.setAttribute("aria-hidden", String(!expanded));
+    details.toggleAttribute("inert", !expanded);
+  }
+
+  return expanded;
 }
 
 function renderPlanningAdminActions(task) {
