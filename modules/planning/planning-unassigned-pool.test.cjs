@@ -100,7 +100,7 @@ test('automatic planning start date uses the Chile calendar and preserves every 
 });
 
 test('Planning module graph uses one cache version and named Firestore exports exist', () => {
-  const version = '2026-07-14-planning-weekly-admin-cache-v1';
+  const version = '2026-07-17-production-readiness-ui-v1';
   const requiredExports = ['createTask', 'updateTask', 'getAllTasks', 'getAssignableUsers', 'addComment', 'getComments', 'addTimelineEvent', 'getTimeline', 'claimPlanningTask'];
   const planningImports = ['addComment', 'addTimelineEvent', 'createTask', 'getComments', 'getAllTasks', 'getAssignableUsers', 'getTimeline', 'updateTask'];
 
@@ -434,7 +434,7 @@ test('the real assigned-task card renders operator date action independently fro
 
 test('assigned-task cards start collapsed and expand independently with accessible controls', () => {
   const uiContext = createPlanningUiContext();
-  const accordionVersion = '2026-07-15-planning-card-accordion-v1';
+  const accordionVersion = '2026-07-17-production-readiness-ui-v1';
   const task = {
     id: 'task/accordion-1',
     planningCode: 'PP-2026-29-003',

@@ -1,6 +1,6 @@
-import { auth } from "./firebase-config.js?v=2026-07-14-planning-weekly-admin-cache-v1";
+import { auth } from "./firebase-config.js?v=2026-07-17-production-readiness-ui-v1";
 import { onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/12.15.0/firebase-auth.js";
-import { ensureUserProfile } from "./firestore.js?v=2026-07-14-planning-weekly-admin-cache-v1";
+import { ensureUserProfile } from "./firestore.js?v=2026-07-17-production-readiness-ui-v1";
 
 onAuthStateChanged(auth, async (user) => {
     console.info("[PSI] Estado de autenticación", {
