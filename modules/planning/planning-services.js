@@ -84,7 +84,12 @@ export async function savePlanningTask(task, currentUser = null) {
 
 export async function updatePlanningTaskData(taskId, task) {
 
-    const taskData = preparePlanningTaskForFirestore(task);
+    const taskData = task?.completedTypeCorrectionDone === true
+        ? {
+            otPsi: task.otPsi || "",
+            completedTypeCorrectionDone: true
+        }
+        : preparePlanningTaskForFirestore(task);
 
     console.log("[Planning][Firestore] Antes de actualizar tarea en Firestore", taskId, taskData);
 

@@ -39,6 +39,32 @@ function createPlanningTimelineServiceContext() {
   return serviceContext;
 }
 
+function createPlanningCompletedCorrectionContext() {
+  const correctionContext = createPlanningEngineContext();
+  const start = planning.indexOf('async function savePlanningCompletedTaskReferenceCorrection');
+  const end = planning.indexOf('async function executePlanningTaskAction', start);
+  correctionContext.window.currentUserProfile = { uid: 'operator-1', role: 'operator', name: 'Adrián Cabello' };
+  correctionContext.canCurrentOperatorCorrectCompletedTaskReference = (task, user) => (
+    String(user?.role || '').trim().toLowerCase() === 'operator' &&
+    correctionContext.isPlanningTaskCompleted(task) &&
+    task?.completedTypeCorrectionDone !== true
+  );
+  correctionContext.updatePlanningTaskData = async (taskId, payload) => {
+    correctionContext.updatedTaskId = taskId;
+    correctionContext.updatedPayload = payload;
+  };
+  correctionContext.savePlanningTimelineEvent = async (taskId, event) => {
+    correctionContext.timelineTaskId = taskId;
+    correctionContext.savedTimelineEvent = event;
+    return { ...event, id: 'timeline-1' };
+  };
+  correctionContext.refreshPlanningBoard = () => {
+    correctionContext.refreshCount = (correctionContext.refreshCount || 0) + 1;
+  };
+  vm.runInContext(planning.slice(start, end), correctionContext);
+  return correctionContext;
+}
+
 function createFirestorePlanningDateContext() {
   const start = firestore.indexOf('function isPlanningIsoCalendarDate');
   const end = firestore.indexOf('export async function claimPlanningTask');
@@ -101,6 +127,7 @@ test('automatic planning start date uses the Chile calendar and preserves every 
 
 test('Planning module graph uses one cache version and named Firestore exports exist', () => {
   const version = '2026-07-17-production-readiness-ui-v1';
+  const planningVersion = '2026-07-20-planning-v5';
   const requiredExports = ['createTask', 'updateTask', 'getAllTasks', 'getAssignableUsers', 'addComment', 'getComments', 'addTimelineEvent', 'getTimeline', 'claimPlanningTask'];
   const planningImports = ['addComment', 'addTimelineEvent', 'createTask', 'getComments', 'getAllTasks', 'getAssignableUsers', 'getTimeline', 'updateTask'];
 
@@ -119,7 +146,9 @@ test('Planning module graph uses one cache version and named Firestore exports e
   assert.match(login, new RegExp(`firebase-config\\.js\\?v=${version}`));
   assert.match(login, new RegExp(`firestore\\.js\\?v=${version}`));
   assert.match(index, new RegExp(`window\\.APP_VERSION = "${version}"`));
-  assert.match(index, new RegExp(`planning-services\\.js\\?v=${version}`));
+  assert.match(index, new RegExp(`planning-services\\.js\\?v=${planningVersion}`));
+  assert.match(index, new RegExp(`planning-ui\\.js\\?v=${planningVersion}`));
+  assert.match(index, new RegExp(`modules/planning/planning\\.js\\?v=${planningVersion}`));
   assert.match(app, new RegExp(`features\\.js\\?v=${version}`));
   assert.match(features, /export const FEATURES/);
   assert.match(loginPage, new RegExp(`window\\.APP_VERSION = "${version}"`));
@@ -239,7 +268,7 @@ test('pool card actions preserve the admin-only edit and delete permission matri
   assert.match(planningUi, /editPlanningTask\('\$\{escapePlanningAttribute\(task\.id\)\}', event\)/);
   assert.match(planningUi, /handlePlanningDeleteTask\('\$\{escapePlanningAttribute\(task\.id\)\}', event\)/);
   assert.match(planningUi, /canClaim = canCurrentUserClaimPlanningTask\(\) && isPlanningTaskAvailableForSelfAssignment\(task\)/);
-  assert.match(planningUi, /function canCurrentUserModifyPlanningTasks\(\) \{\s*return window\.currentUserProfile\?\.role === "admin";/);
+  assert.match(planningUi, /function canCurrentUserModifyPlanningTasks\(\) \{\s*return String\(window\.currentUserProfile\?\.role \|\| ""\)\.trim\(\)\.toLowerCase\(\) === "admin";/);
   assert.match(planning, /if \(!canCurrentUserModifyPlanningTasks\(\)\) \{\s*console\.warn\("Acción no permitida"\);\s*return;/);
 });
 
@@ -434,7 +463,8 @@ test('the real assigned-task card renders operator date action independently fro
 
 test('assigned-task cards start collapsed and expand independently with accessible controls', () => {
   const uiContext = createPlanningUiContext();
-  const accordionVersion = '2026-07-17-production-readiness-ui-v1';
+  const styleVersion = '2026-07-17-production-readiness-ui-v1';
+  const planningVersion = '2026-07-20-planning-v5';
   const task = {
     id: 'task/accordion-1',
     planningCode: 'PP-2026-29-003',
@@ -455,9 +485,11 @@ test('assigned-task cards start collapsed and expand independently with accessib
   assert.match(initialMarkup, /aria-hidden="true"/);
   assert.match(initialMarkup, /\sinert/);
   assert.match(toggleMarkup, /Ensamble/);
-  assert.match(toggleMarkup, /PP-2026-29-003/);
+  assert.match(toggleMarkup, /OT • INGESUB/);
   assert.match(toggleMarkup, /Pausada/);
-  assert.doesNotMatch(toggleMarkup, /OT 11996|Comentarios|Timeline|Iniciar/);
+  assert.doesNotMatch(toggleMarkup, /PP-2026-29-003/);
+  assert.doesNotMatch(toggleMarkup, /Comentarios|Timeline|Iniciar/);
+  assert.match(uiContext.renderPlanningCardTypeClient({ tipo: 'Cotización' }), /COTIZACIÓN • Sin cliente/);
 
   const details = {
     attributes: {},
@@ -480,8 +512,67 @@ test('assigned-task cards start collapsed and expand independently with accessib
   assert.equal(uiContext.isPlanningCardExpanded('another-task'), false);
   assert.match(uiContext.renderPlanningCard(task), /aria-expanded="true"/);
   assert.match(uiContext.renderPlanningCard({ ...task, id: 'another-task' }), /aria-expanded="false"/);
-  assert.match(index, new RegExp(`style\\.css\\?v=${accordionVersion}`));
-  assert.match(index, new RegExp(`planning-ui\\.js\\?v=${accordionVersion}`));
+  assert.match(index, new RegExp(`style\\.css\\?v=${styleVersion}`));
+  assert.match(index, new RegExp(`planning-ui\\.js\\?v=${planningVersion}`));
+});
+
+test('completed-task reference correction is separate for operators and preserves full admin editing', async () => {
+  const uiContext = createPlanningUiContext();
+  const completedTask = { id: 'completed-1', estado: 'Terminado', tipo: 'Interna' };
+  uiContext.window.currentUserProfile = { role: ' Admin ' };
+
+  const availableActions = uiContext.renderPlanningAdminActions(completedTask);
+  const correctedActions = uiContext.renderPlanningAdminActions({ ...completedTask, completedTypeCorrectionDone: true });
+  assert.match(availableActions, /Editar/);
+  assert.match(correctedActions, /Editar/);
+  assert.match(correctedActions, /Duplicar/);
+  assert.match(correctedActions, /Eliminar/);
+  assert.equal(uiContext.renderPlanningCompletedReferenceCorrectionAction(completedTask), '');
+
+  uiContext.window.currentUserProfile = { role: 'operator' };
+  assert.doesNotMatch(uiContext.renderPlanningAdminActions(completedTask), /Editar/);
+  assert.match(uiContext.renderPlanningCompletedReferenceCorrectionAction(completedTask), /Corregir Referencia/);
+  assert.equal(uiContext.renderPlanningCompletedReferenceCorrectionAction({ ...completedTask, completedTypeCorrectionDone: true }), '');
+  assert.equal(uiContext.renderPlanningCompletedReferenceCorrectionAction({ ...completedTask, estado: 'Pendiente' }), '');
+
+  const correctionModal = uiContext.renderPlanningCompletedReferenceCorrectionModal();
+  assert.match(correctionModal, /<input name="otPsi" type="text"/);
+  assert.doesNotMatch(correctionModal, /<select name="tipo"/);
+  assert.doesNotMatch(correctionModal, /Cliente|Responsable|Prioridad|Fecha objetivo/);
+  const editSource = planningUi.slice(planningUi.indexOf('function editPlanningTask'), planningUi.indexOf('function setPlanningModalMode'));
+  assert.doesNotMatch(editSource, /completedTypeCorrectionDone|disabled|setPlanningCompletedTypeCorrectionMode/);
+  const adminSubmitSource = planningUi.slice(planningUi.indexOf('async function handleNewTaskSubmit'), planningUi.indexOf('function validatePlanningTaskForm'));
+  assert.doesNotMatch(adminSubmitSource, /savePlanningCompletedTaskReferenceCorrection|completedReferenceCorrection/);
+
+  const correctionContext = createPlanningCompletedCorrectionContext();
+  correctionContext.setPlanningTasks([{
+    id: 'completed-1',
+    planningCode: 'PP-2026-30-001',
+    estado: 'Terminado',
+    tipo: 'PSI',
+    otPsi: 'OT12061',
+    timelineLocal: []
+  }]);
+  await correctionContext.savePlanningCompletedTaskReferenceCorrection('completed-1', 'OT12061 / PSI-FSDMABP-80D');
+  assert.deepEqual(
+    JSON.parse(JSON.stringify(correctionContext.updatedPayload)),
+    { otPsi: 'OT12061 / PSI-FSDMABP-80D', completedTypeCorrectionDone: true }
+  );
+  assert.equal(correctionContext.savedTimelineEvent.type, 'reference_correction');
+  assert.equal(correctionContext.savedTimelineEvent.description, "Adrián Cabello corrigió la referencia de 'OT12061' a 'OT12061 / PSI-FSDMABP-80D'.");
+  assert.equal(correctionContext.savedTimelineEvent.userId, 'operator-1');
+  assert.ok(correctionContext.savedTimelineEvent.date);
+  assert.equal(correctionContext.getPlanningTasks()[0].completedTypeCorrectionDone, true);
+  assert.equal(correctionContext.getPlanningTasks()[0].tipo, 'PSI');
+  assert.equal(correctionContext.getPlanningTasks()[0].otPsi, 'OT12061 / PSI-FSDMABP-80D');
+  assert.equal(correctionContext.getPlanningTasks()[0].timelineLocal.at(-1).id, 'timeline-1');
+  assert.equal(correctionContext.refreshCount, 1);
+
+  assert.match(planning, /const correction = \{\s*otPsi: correctedReference,\s*completedTypeCorrectionDone: true\s*\}/);
+  assert.match(planning, /createPlanningTimelineEvent\(\s*"reference_correction",\s*`\$\{userName\} corrigió la referencia de '\$\{previousReference\}' a '\$\{correctedReference\}'\.\`/);
+  assert.match(planning, /await savePlanningTimelineEvent\(taskId, timelineEvent\)/);
+  assert.match(planningUi, /reference_correction: "Referencia corregida"/);
+  assert.match(planningServices, /task\?\.completedTypeCorrectionDone === true[\s\S]*otPsi: task\.otPsi \|\| ""[\s\S]*completedTypeCorrectionDone: true/);
 });
 
 test('admin can take and finish only an available pool task with one local audit event', () => {

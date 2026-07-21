@@ -136,6 +136,7 @@ function renderPlanningModule(tasks) {
 
     ${renderNewTaskModal()}
     ${renderOperatorPlanningDatesModal()}
+    ${renderPlanningCompletedReferenceCorrectionModal()}
     ${renderPlanningCommentsModal()}
     ${renderPlanningTimelineModal()}
   `;
@@ -402,6 +403,7 @@ function renderPlanningCompletedTaskCompact(task) {
       </div>
       <div class="task-secondary-actions">
         ${renderPlanningAdminActions(task)}
+        ${renderPlanningCompletedReferenceCorrectionAction(task)}
         ${renderPlanningOperatorDatesAction(task)}
         <button type="button" class="task-action-btn" onclick="openPlanningComments('${task.id}', event)">Comentarios (${getPlanningCommentsCount(task)})</button>
         <button type="button" class="task-action-btn" onclick="openPlanningTimeline('${task.id}', event)">Timeline</button>
@@ -850,7 +852,7 @@ function renderPlanningCard(task) {
       >
         <div class="task-title-block">
           <strong>${escapePlanningHtml(task.actividad || "Sin actividad")}</strong>
-          <span>${escapePlanningHtml(getPlanningTaskCode(task))}</span>
+          <span>${renderPlanningCardTypeClient(task)}</span>
         </div>
 
         <div class="task-card-actions">
@@ -909,6 +911,13 @@ function renderPlanningCard(task) {
   `;
 }
 
+function renderPlanningCardTypeClient(task) {
+  const type = String(task?.tipo || "").trim().replace(/^Orden de Trabajo\s*/i, "").toUpperCase();
+  const client = String(task?.cliente || "").trim() || "Sin cliente";
+
+  return `${escapePlanningHtml(type)} • ${escapePlanningHtml(client)}`;
+}
+
 function getPlanningCardDetailsId(taskId) {
   return `planning-task-details-${encodeURIComponent(String(taskId || "unknown")).replace(/%/g, "-")}`;
 }
@@ -961,7 +970,20 @@ function renderPlanningAdminActions(task) {
 }
 
 function canCurrentUserModifyPlanningTasks() {
-  return window.currentUserProfile?.role === "admin";
+  return String(window.currentUserProfile?.role || "").trim().toLowerCase() === "admin";
+}
+
+function canCurrentOperatorCorrectCompletedTaskReference(task, user = window.currentUserProfile) {
+  const role = String(user?.role || "").trim().toLowerCase();
+  return role === "operator" && isPlanningTaskCompleted(task) && task?.completedTypeCorrectionDone !== true;
+}
+
+function renderPlanningCompletedReferenceCorrectionAction(task) {
+  if (!canCurrentOperatorCorrectCompletedTaskReference(task)) {
+    return "";
+  }
+
+  return `<button type="button" class="task-action-btn" onclick="openPlanningCompletedReferenceCorrectionModal('${escapePlanningAttribute(task.id)}', event)">Corregir Referencia</button>`;
 }
 
 function renderPlanningOperatorDatesAction(task) {
@@ -1154,6 +1176,87 @@ function getOperatorPlanningDatesErrorMessage(error) {
   return messages[error?.code] || "No se pudieron guardar las fechas. Revisa conexión o permisos de Firestore.";
 }
 
+
+function renderPlanningCompletedReferenceCorrectionModal() {
+  return `
+    <div id="planningCompletedReferenceCorrectionModal" class="modal-overlay" hidden>
+      <div class="modal-card modal-card-compact">
+        <div class="modal-header">
+          <div><h3>Corregir Referencia</h3><p>Esta corrección solo puede realizarse una vez.</p></div>
+          <button type="button" class="modal-close" aria-label="Cerrar" onclick="closePlanningCompletedReferenceCorrectionModal()">X</button>
+        </div>
+        <form id="planningCompletedReferenceCorrectionForm" class="task-form" onsubmit="handlePlanningCompletedReferenceCorrectionSubmit(event)">
+          <input name="taskId" type="hidden">
+          <label>
+            Referencia OT / PSI / OTRO
+            <input name="otPsi" type="text" autocomplete="off">
+          </label>
+          <div class="modal-actions">
+            <p id="planningCompletedReferenceCorrectionError" class="task-modal-error" role="alert" hidden></p>
+            <button type="button" class="secondary-btn" onclick="closePlanningCompletedReferenceCorrectionModal()">Cancelar</button>
+            <button id="planningCompletedReferenceCorrectionSubmit" type="submit" class="primary-btn">Guardar Referencia</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  `;
+}
+
+function openPlanningCompletedReferenceCorrectionModal(taskId, event) {
+  if (event) event.stopPropagation();
+
+  const task = getPlanningTasks().find(item => item.id === taskId);
+  if (!canCurrentOperatorCorrectCompletedTaskReference(task)) {
+    console.warn("Acción no permitida para corregir la referencia.");
+    return;
+  }
+
+  const modal = document.getElementById("planningCompletedReferenceCorrectionModal");
+  const form = document.getElementById("planningCompletedReferenceCorrectionForm");
+  if (!modal || !form) return;
+
+  form.elements.taskId.value = task.id;
+  form.elements.otPsi.value = String(task.otPsi || "");
+  setPlanningCompletedReferenceCorrectionError("");
+  modal.hidden = false;
+}
+
+function closePlanningCompletedReferenceCorrectionModal() {
+  const modal = document.getElementById("planningCompletedReferenceCorrectionModal");
+  const form = document.getElementById("planningCompletedReferenceCorrectionForm");
+  if (form) form.reset();
+  setPlanningCompletedReferenceCorrectionError("");
+  if (modal) modal.hidden = true;
+}
+
+function setPlanningCompletedReferenceCorrectionError(message) {
+  const error = document.getElementById("planningCompletedReferenceCorrectionError");
+  if (!error) return;
+  error.textContent = message;
+  error.hidden = !message;
+}
+
+async function handlePlanningCompletedReferenceCorrectionSubmit(event) {
+  event.preventDefault();
+
+  const form = event.target;
+  const taskId = form.elements.taskId.value;
+  const reference = form.elements.otPsi.value;
+  const submit = document.getElementById("planningCompletedReferenceCorrectionSubmit");
+
+  setPlanningCompletedReferenceCorrectionError("");
+  if (submit) submit.disabled = true;
+
+  try {
+    await savePlanningCompletedTaskReferenceCorrection(taskId, reference);
+    closePlanningCompletedReferenceCorrectionModal();
+  } catch (error) {
+    console.error("No se pudo corregir la referencia de la tarea terminada.", error);
+    setPlanningCompletedReferenceCorrectionError("No se pudo guardar la corrección. Revisa conexión o permisos de Firestore.");
+  } finally {
+    if (submit) submit.disabled = false;
+  }
+}
 
 function renderNewTaskModal() {
   return `
@@ -1429,8 +1532,9 @@ async function handleNewTaskSubmit(event) {
 
     const form = event.target;
     const formData = new FormData(form);
-    const taskId = formData.get("taskId");
+    const taskId = form.elements.taskId.value;
     const submitLabel = taskId ? "Guardar cambios" : "Guardar tarea";
+
     const responsibleUser = getPlanningSelectedResponsibleUser(form);
     const actividad = getPlanningFormActivityValue(form, formData);
 
@@ -2083,6 +2187,7 @@ function getPlanningTimelineTypeLabel(type) {
     duplicate: "Duplicada",
     self_assigned: "Autoasignación",
     admin_take_and_finish: "Tomar y terminar",
+    reference_correction: "Referencia corregida",
     delete: "Eliminación"
   };
 

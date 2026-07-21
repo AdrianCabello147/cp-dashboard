@@ -102,6 +102,42 @@ async function savePlanningTaskChanges(taskId, task) {
     }
 }
 
+async function savePlanningCompletedTaskReferenceCorrection(taskId, reference) {
+    const currentTask = getPlanningTasks().find(item => item.id === taskId);
+
+    if (!canCurrentOperatorCorrectCompletedTaskReference(currentTask, window.currentUserProfile)) {
+        throw new Error("La corrección de referencia no está disponible");
+    }
+
+    const previousReference = String(currentTask.otPsi || "");
+    const correctedReference = String(reference || "");
+    const currentUser = window.currentUserProfile;
+    const userName = getPlanningUserDisplayName(currentUser, "Operador");
+    const correction = {
+        otPsi: correctedReference,
+        completedTypeCorrectionDone: true
+    };
+    const timelineEvent = createPlanningTimelineEvent(
+        "reference_correction",
+        `${userName} corrigió la referencia de '${previousReference}' a '${correctedReference}'.`,
+        getCurrentPlanningTimestamp(),
+        currentUser,
+        {
+            taskId,
+            planningCode: currentTask.planningCode || ""
+        }
+    );
+
+    await updatePlanningTaskData(taskId, correction);
+    const savedTimelineEvent = await savePlanningTimelineEvent(taskId, timelineEvent);
+    setPlanningTasks(getPlanningTasks().map(task => task.id === taskId ? {
+        ...task,
+        ...correction,
+        timelineLocal: [...(task.timelineLocal || []), savedTimelineEvent]
+    } : task));
+    refreshPlanningBoard();
+}
+
 async function executePlanningTaskAction(taskId, action) {
     const currentUser = window.currentUserProfile;
     const persistedTask = await executePlanningTaskActionInFirestore(taskId, action, currentUser);
