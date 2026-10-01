@@ -1,7 +1,7 @@
 import { FEATURES } from "./features.js?v=2026-07-17-production-readiness-ui-v1";
 
 const APP_VERSION = window.APP_VERSION || "2026-07-17-production-readiness-ui-v1";
-const PRODUCTION_ASSET_VERSION = "2026-10-01-production-customer-date-order-v2";
+const PRODUCTION_ASSET_VERSION = "2026-10-01-production-ot-nv-v3";
 const PRODUCTION_ALLOWED_USERS = ["acabello@alte.cl"];
 
 function isProductionUserAllowed() {

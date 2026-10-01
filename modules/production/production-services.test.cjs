@@ -26,6 +26,28 @@ test("adapta OT separando documentId, Prod_DocEntry y Production Order", () => {
   assert.equal(order.productionOrder, 11873);
 });
 
+test("adapta Sales Order con prioridad y fallbacks sin confundirla con Prod_DocEntry", () => {
+  const origin = context.mapProductionOrder("5442", {
+    sap: { Prod_DocEntry: 5442, "Production Order": 12083, "Sales Order Origen": 83205, "Numero Sales Order": 99999 }
+  });
+  const numberFallback = context.mapProductionOrder("5443", {
+    sap: { Prod_DocEntry: 5443, "Production Order": 12084, "Numero Sales Order": 83206 }
+  });
+  const accentedFallback = context.mapProductionOrder("5444", {
+    sap: { Prod_DocEntry: 5444, "Production Order": 12085, "Número Sales Order": 83207 }
+  });
+  const missing = context.mapProductionOrder("5445", {
+    sap: { Prod_DocEntry: 5445, "Production Order": 12086 }
+  });
+
+  assert.equal(origin.prodDocEntry, "5442");
+  assert.equal(origin.productionOrder, 12083);
+  assert.equal(origin.salesOrder, 83205);
+  assert.equal(numberFallback.salesOrder, 83206);
+  assert.equal(accentedFallback.salesOrder, 83207);
+  assert.equal(missing.salesOrder, null);
+});
+
 test("usa Original Target Day como Fecha Cliente y conserva los fallbacks", () => {
   const original = context.mapProductionOrder("4505", {
     sap: {
@@ -159,7 +181,7 @@ test("semáforo interpreta YYYY-MM-DD como fecha calendario sin desplazamiento U
 
 test("filtros de materiales se combinan con búsqueda, estado, semáforo y cliente", () => {
   const orders = [
-    { productionOrder: 1, product: "Ensamble A", customer: "Cliente A", status: "Liberada", customerDate: "2099-01-01", materialClassification: "ready" },
+    { productionOrder: 1, salesOrder: 83205, product: "Ensamble A", customer: "Cliente A", status: "Liberada", customerDate: "2099-01-01", materialClassification: "ready" },
     { productionOrder: 2, product: "Ensamble B", customer: "Cliente B", status: "Liberada", customerDate: "2026-07-20", materialClassification: "waiting" }
   ];
   assert.equal(context.filterProductionOrders(orders, { materials: "all" }).length, 2);
@@ -168,6 +190,7 @@ test("filtros de materiales se combinan con búsqueda, estado, semáforo y clien
   assert.deepEqual(Array.from(context.filterProductionOrders(orders, {
     materials: "ready", search: "ensamble a", status: "Liberada", trafficLight: "En plazo", customer: "Cliente A"
   }), order => order.productionOrder), [1]);
+  assert.deepEqual(Array.from(context.filterProductionOrders(orders, { search: "83205" }), order => order.productionOrder), [1]);
   assert.equal(context.filterProductionOrders(orders, { materials: "ready", customer: "Cliente B" }).length, 0);
 });
 
@@ -340,7 +363,7 @@ test("precarga automáticamente después del primer render y reutiliza caché", 
 });
 
 test("versiona exclusivamente el cargador y los módulos de Producción", () => {
-  const version = "2026-10-01-production-customer-date-order-v2";
+  const version = "2026-10-01-production-ot-nv-v3";
   assert.match(indexSource, new RegExp(`shared/app\\.js\\?v=${version}`));
   assert.match(appSource, new RegExp(`PRODUCTION_ASSET_VERSION = "${version}"`));
   for (const moduleName of ["production-engine", "production-services", "production-ui", "production"]) {
@@ -428,17 +451,31 @@ test("tarjetas KPI son filtros accesibles con estado activo", () => {
 
 test("fila de OT es compacta y usa un botón expandible sin botones anidados", () => {
   const html = context.renderProductionTable([{
-    id: "4505", documentId: "4505", productionOrder: 11884, customer: "Cliente", product: "Producto con descripción extensa",
+    id: "5442", documentId: "5442", productionOrder: 12083, salesOrder: 83205, customer: "Cliente", product: "Producto con descripción extensa",
     status: "Liberada", customerDate: "2099-01-01", targetDate: "2099-01-02", materialState: "loaded",
     materialClassification: "waiting", componentsExpanded: false, components: []
   }]);
   assert.equal((html.match(/<th>/g) || []).length, 9);
+  assert.match(html, /<th>OT \/ NV<\/th>/);
+  assert.match(html, />12083 \/ 83205<\/strong>/);
+  assert.match(html, /title="OT 12083 · NV 83205"/);
   assert.match(html, /class="production-cell-clamp"[^>]*title="Producto con descripción extensa"/);
-  assert.match(html, /<button[\s\S]*aria-expanded="false"[\s\S]*aria-controls="production-components-4505"/);
+  assert.match(html, /<button[\s\S]*aria-expanded="false"[\s\S]*aria-controls="production-components-5442"/);
   assert.doesNotMatch(html, /<button[^>]*>[\s\S]*<button/);
   assert.match(html, /production-date-verde/);
   assert.match(html, /En plazo/);
   assert.match(html, /Esperando materiales/);
+});
+
+test("fila sin Sales Order muestra solamente la Production Order", () => {
+  const html = context.renderProductionTable([{
+    id: "5445", documentId: "5445", productionOrder: 12086, salesOrder: null, customer: "Cliente", product: "Producto",
+    status: "Liberada", customerDate: "2099-01-01", targetDate: "2099-01-02", materialState: "loaded",
+    materialClassification: "ready", componentsExpanded: false, components: []
+  }]);
+  assert.match(html, /title="OT 12086">12086<\/strong>/);
+  assert.doesNotMatch(html, /12086\s*\//);
+  assert.doesNotMatch(html, /undefined|null/);
 });
 
 test("selector de semáforo usa exclusivamente las cinco categorías centrales", () => {

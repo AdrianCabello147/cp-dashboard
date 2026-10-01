@@ -163,7 +163,7 @@ function renderProductionTable(orders) {
       <table class="production-table">
         <thead>
           <tr>
-            <th>Production Order</th>
+            <th>OT / NV</th>
             <th>Cliente</th>
             <th>Producto / ensamble</th>
             <th>Estado</th>
@@ -184,6 +184,7 @@ function renderProductionTable(orders) {
 
 function renderProductionOrderRows(order) {
   const safeId = escapeProductionHtml(order.id);
+  const orderReference = getProductionOrderReference(order);
   const dateStatus = getProductionCustomerDateStatus(order.customerDate);
   const materialLabel = getProductionMaterialStatusLabel(order);
   const componentsId = `production-components-${safeId}`;
@@ -193,7 +194,7 @@ function renderProductionOrderRows(order) {
       class="production-order-row production-date-${dateStatus.cssClass}${order.componentsExpanded ? " is-expanded" : ""}"
       data-production-order="${safeId}"
     >
-      <td class="production-order-number"><strong>${escapeProductionHtml(order.productionOrder)}</strong></td>
+      <td class="production-order-number"><strong title="${escapeProductionHtml(orderReference.title)}">${escapeProductionHtml(orderReference.value)}</strong></td>
       <td><span class="production-cell-clamp" title="${escapeProductionHtml(order.customer)}">${escapeProductionHtml(order.customer)}</span></td>
       <td><span class="production-cell-clamp" title="${escapeProductionHtml(order.product)}">${escapeProductionHtml(order.product)}</span></td>
       <td>${escapeProductionHtml(order.status)}</td>
@@ -222,6 +223,22 @@ function renderProductionOrderRows(order) {
       <td colspan="9">${renderProductionComponents(order)}</td>
     </tr>
   `;
+}
+
+function getProductionOrderReference(order) {
+  const productionOrder = normalizeProductionKey(order?.productionOrder);
+  const salesOrder = normalizeProductionKey(order?.salesOrder);
+  const value = productionOrder && salesOrder
+    ? `${productionOrder} / ${salesOrder}`
+    : productionOrder || salesOrder || "—";
+  const title = productionOrder && salesOrder
+    ? `OT ${productionOrder} · NV ${salesOrder}`
+    : productionOrder
+      ? `OT ${productionOrder}`
+      : salesOrder
+        ? `NV ${salesOrder}`
+        : "OT y NV no informadas";
+  return { value, title };
 }
 
 function getProductionMaterialStatusLabel(order) {

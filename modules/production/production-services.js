@@ -141,6 +141,7 @@ function mapProductionOrder(documentId, data) {
     prodDocEntry,
     identitySafe,
     productionOrder: getProductionSapValue(sap, ["Production Order"], normalizedDocumentId),
+    salesOrder: getProductionSapValue(sap, ["Sales Order Origen", "Numero Sales Order", "Número Sales Order"], null),
     status: getProductionSapValue(sap, ["Estado OT"], "Sin estado"),
     customer: getProductionSapValue(sap, ["Nombre Cliente", "Codigo Cliente"]),
     seller: getProductionSapValue(sap, ["Vendedor"]),

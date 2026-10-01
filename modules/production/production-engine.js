@@ -76,6 +76,7 @@ function filterProductionOrders(orders, filters) {
   return (orders || []).filter(order => {
     const orderSearchText = normalizeProductionFilterValue([
       order.productionOrder,
+      order.salesOrder,
       order.customer,
       order.product,
       order.status,
