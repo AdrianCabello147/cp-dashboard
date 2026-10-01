@@ -89,7 +89,7 @@ function filterProductionOrders(orders, filters) {
       && (!trafficLight || normalizeProductionFilterValue(customerDateStatus.label) === trafficLight)
       && (!customer || normalizeProductionFilterValue(order.customer) === customer)
       && (!materials || materials === "all" || normalizeProductionFilterValue(order.materialClassification) === materials);
-  });
+  }).sort(compareProductionOrders);
 }
 
 function getProductionFilterOptions(orders, field) {

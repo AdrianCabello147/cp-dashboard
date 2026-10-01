@@ -7,6 +7,8 @@ const source = fs.readFileSync("modules/production/production-services.js", "utf
 const engineSource = fs.readFileSync("modules/production/production-engine.js", "utf8");
 const uiSource = fs.readFileSync("modules/production/production-ui.js", "utf8");
 const productionSource = fs.readFileSync("modules/production/production.js", "utf8");
+const appSource = fs.readFileSync("shared/app.js", "utf8");
+const indexSource = fs.readFileSync("index.html", "utf8");
 const styleSource = fs.readFileSync("style.css", "utf8");
 const context = { console: { warn() {} }, PRODUCTION_FILTERS: { materials: "all" } };
 vm.createContext(context);
@@ -24,37 +26,97 @@ test("adapta OT separando documentId, Prod_DocEntry y Production Order", () => {
   assert.equal(order.productionOrder, 11873);
 });
 
-test("usa Target Day Línea SO como Fecha Cliente y conserva el fallback", () => {
-  const current = context.mapProductionOrder("4505", {
+test("usa Original Target Day como Fecha Cliente y conserva los fallbacks", () => {
+  const original = context.mapProductionOrder("4505", {
     sap: {
       Prod_DocEntry: 4505,
       "Production Order": 11884,
+      "Original Target Day": "2026-10-15",
       "Target Day Línea SO": "2026-09-04",
       "Fecha Comprometida SO": "2026-01-14"
     }
   });
-  const legacy = context.mapProductionOrder("4881", {
+  const lineTarget = context.mapProductionOrder("4881", {
     sap: {
       Prod_DocEntry: 4881,
       "Production Order": 11979,
+      "Target Day Línea SO": "2026-09-04",
+      "Fecha Comprometida SO": "2026-04-09"
+    }
+  });
+  const commitment = context.mapProductionOrder("4882", {
+    sap: {
+      Prod_DocEntry: 4882,
+      "Production Order": 11980,
       "Fecha Comprometida SO": "2026-04-09"
     }
   });
 
-  assert.equal(current.customerDate, "2026-09-04");
-  assert.equal(current.salesOrderCommitmentDate, "2026-01-14");
-  assert.equal(legacy.customerDate, "2026-04-09");
+  assert.equal(original.customerDate, "2026-10-15");
+  assert.equal(original.salesOrderCommitmentDate, "2026-01-14");
+  assert.equal(lineTarget.customerDate, "2026-09-04");
+  assert.equal(commitment.customerDate, "2026-04-09");
 });
 
 test("ordena Producción por Fecha Cliente", () => {
   const laterHeaderButEarlierCustomer = context.mapProductionOrder("1", {
-    sap: { Prod_DocEntry: 1, "Production Order": 1, "Target Day Línea SO": "2026-05-01", "Fecha Comprometida SO": "2026-01-01" }
+    sap: { Prod_DocEntry: 1, "Production Order": 1, "Original Target Day": "2026-05-01", "Target Day Línea SO": "2026-12-01", "Fecha Comprometida SO": "2026-01-01" }
   });
   const earlierHeaderButLaterCustomer = context.mapProductionOrder("2", {
-    sap: { Prod_DocEntry: 2, "Production Order": 2, "Target Day Línea SO": "2026-06-01", "Fecha Comprometida SO": "2025-12-01" }
+    sap: { Prod_DocEntry: 2, "Production Order": 2, "Original Target Day": "2026-06-01", "Target Day Línea SO": "2026-02-01", "Fecha Comprometida SO": "2025-12-01" }
   });
 
   assert.ok(context.compareProductionOrders(laterHeaderButEarlierCustomer, earlierHeaderButLaterCustomer) < 0);
+  assert.equal(context.getProductionCustomerDateStatus(laterHeaderButEarlierCustomer.customerDate, new Date(2026, 4, 1)).days, 0);
+});
+
+test("agrupa listas para armar antes de las que esperan materiales y ordena cada grupo por Fecha Cliente", () => {
+  const orders = [
+    { productionOrder: 40, customerDate: "2026-01-01", materialClassification: "waiting" },
+    { productionOrder: 30, customerDate: "2026-06-15", materialClassification: "ready" },
+    { productionOrder: 20, customerDate: "2026-05-10", materialClassification: "waiting" },
+    { productionOrder: 10, customerDate: "2026-06-01", materialClassification: "ready" }
+  ];
+
+  assert.deepEqual(
+    Array.from(context.filterProductionOrders(orders, { materials: "all" }), order => order.productionOrder),
+    [10, 30, 40, 20]
+  );
+});
+
+test("deja fechas vacías al final de cada grupo y desempata por Production Order", () => {
+  const orders = [
+    { productionOrder: 120, customerDate: null, materialClassification: "ready" },
+    { productionOrder: 110, customerDate: "fecha inválida", materialClassification: "ready" },
+    { productionOrder: 102, customerDate: "2026-07-01", materialClassification: "ready" },
+    { productionOrder: 101, customerDate: "2026-07-01", materialClassification: "ready" },
+    { productionOrder: 210, customerDate: null, materialClassification: "waiting" },
+    { productionOrder: 201, customerDate: "2026-06-01", materialClassification: "waiting" },
+    { productionOrder: 1, customerDate: "2026-01-01", materialClassification: null }
+  ];
+
+  assert.deepEqual(
+    Array.from(context.filterProductionOrders(orders, { materials: "all" }), order => order.productionOrder),
+    [101, 102, 110, 120, 201, 210, 1]
+  );
+});
+
+test("tarjetas de materiales conservan el orden ascendente dentro de su grupo", () => {
+  const orders = [
+    { productionOrder: 2, customerDate: "2026-07-02", materialClassification: "ready" },
+    { productionOrder: 4, customerDate: "2026-07-04", materialClassification: "waiting" },
+    { productionOrder: 1, customerDate: "2026-07-01", materialClassification: "ready" },
+    { productionOrder: 3, customerDate: "2026-07-03", materialClassification: "waiting" }
+  ];
+
+  assert.deepEqual(
+    Array.from(context.filterProductionOrders(orders, { materials: "ready" }), order => order.productionOrder),
+    [1, 2]
+  );
+  assert.deepEqual(
+    Array.from(context.filterProductionOrders(orders, { materials: "waiting" }), order => order.productionOrder),
+    [3, 4]
+  );
 });
 
 test("renderer presenta Fecha Cliente y deja de usar el encabezado anterior", () => {
@@ -275,6 +337,15 @@ test("precarga automáticamente después del primer render y reutiliza caché", 
   assert.match(source, /productionComponentsRequests\.has\(normalizedId\)/);
   assert.match(source, /duplicateQueriesAvoided/);
   assert.doesNotMatch(source, /collectionGroup/);
+});
+
+test("versiona exclusivamente el cargador y los módulos de Producción", () => {
+  const version = "2026-10-01-production-customer-date-order-v2";
+  assert.match(indexSource, new RegExp(`shared/app\\.js\\?v=${version}`));
+  assert.match(appSource, new RegExp(`PRODUCTION_ASSET_VERSION = "${version}"`));
+  for (const moduleName of ["production-engine", "production-services", "production-ui", "production"]) {
+    assert.match(appSource, new RegExp(`modules/production/${moduleName}\\.js\\?v=\\$\\{PRODUCTION_ASSET_VERSION\\}`));
+  }
 });
 
 test("tabla desplegada conserva exactamente las seis columnas aprobadas", () => {

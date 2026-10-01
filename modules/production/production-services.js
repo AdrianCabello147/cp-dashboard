@@ -130,7 +130,7 @@ function mapProductionOrder(documentId, data) {
   const salesOrderCommitmentDate = getProductionSapValue(sap, ["Fecha Comprometida SO"], null);
   const customerDate = getProductionSapValue(
     sap,
-    ["Target Day Línea SO", "Target Day Linea SO"],
+    ["Original Target Day", "Target Day Línea SO", "Target Day Linea SO"],
     salesOrderCommitmentDate
   );
   if (!identitySafe) console.warn("[PSI] OT con identidad Firestore/SAP inconsistente", { documentId: normalizedDocumentId, prodDocEntry });
@@ -262,8 +262,17 @@ function summarizeProductionComponents(components, commitmentDate) {
 }
 
 function isProductionOrderOpen(order) { const status = normalizeProductionStatus(order.status); return status !== "cerrada" && status !== "cerrado"; }
-function compareProductionOrders(a, b) { return getProductionOrderSortDate(a) - getProductionOrderSortDate(b) || String(a.productionOrder).localeCompare(String(b.productionOrder), "es", { numeric: true }); }
-function getProductionOrderSortDate(order) { const date = toProductionDate(order.customerDate || order.salesOrderCommitmentDate || order.targetDate); return date ? date.getTime() : Number.MAX_SAFE_INTEGER; }
+function compareProductionOrders(a, b) {
+  return getProductionMaterialSortGroup(a) - getProductionMaterialSortGroup(b)
+    || getProductionOrderSortDate(a) - getProductionOrderSortDate(b)
+    || String(a.productionOrder).localeCompare(String(b.productionOrder), "es", { numeric: true });
+}
+function getProductionMaterialSortGroup(order) {
+  if (order?.materialClassification === "ready") return 0;
+  if (order?.materialClassification === "waiting") return 1;
+  return 2;
+}
+function getProductionOrderSortDate(order) { const date = toProductionDate(order?.customerDate); return date ? date.getTime() : Number.MAX_SAFE_INTEGER; }
 function normalizeProductionKey(value) { return value === null || value === undefined ? "" : String(value).trim(); }
 function getProductionSapValue(sap, keys, fallback = "—") { for (const key of keys) { const value = sap[key]; if (value !== null && value !== undefined && value !== "") return value; } return fallback; }
 function toProductionDate(value) { if (!value) return null; if (typeof value.toDate === "function") return value.toDate(); const date = value instanceof Date ? value : new Date(value); return Number.isNaN(date.getTime()) ? null : date; }

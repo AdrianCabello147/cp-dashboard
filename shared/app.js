@@ -1,6 +1,7 @@
 import { FEATURES } from "./features.js?v=2026-07-17-production-readiness-ui-v1";
 
 const APP_VERSION = window.APP_VERSION || "2026-07-17-production-readiness-ui-v1";
+const PRODUCTION_ASSET_VERSION = "2026-10-01-production-customer-date-order-v2";
 const PRODUCTION_ALLOWED_USERS = ["acabello@alte.cl"];
 
 function isProductionUserAllowed() {
@@ -34,10 +35,10 @@ const APP_MODULES = {
     subtitle: "Control local de órdenes de trabajo PSI por estado de fabricación.",
     label: "Producción",
     scripts: [
-      "modules/production/production-engine.js",
-      "modules/production/production-services.js",
-      "modules/production/production-ui.js",
-      "modules/production/production.js"
+      `modules/production/production-engine.js?v=${PRODUCTION_ASSET_VERSION}`,
+      `modules/production/production-services.js?v=${PRODUCTION_ASSET_VERSION}`,
+      `modules/production/production-ui.js?v=${PRODUCTION_ASSET_VERSION}`,
+      `modules/production/production.js?v=${PRODUCTION_ASSET_VERSION}`
     ]
   }
 };
