@@ -363,7 +363,7 @@ test("precarga automáticamente después del primer render y reutiliza caché", 
 });
 
 test("versiona exclusivamente el cargador y los módulos de Producción", () => {
-  const version = "2026-10-01-production-ot-nv-v3";
+  const version = "2026-11-02-production-2025-2026-v1";
   assert.match(indexSource, new RegExp(`shared/app\\.js\\?v=${version}`));
   assert.match(appSource, new RegExp(`PRODUCTION_ASSET_VERSION = "${version}"`));
   for (const moduleName of ["production-engine", "production-services", "production-ui", "production"]) {
@@ -510,7 +510,7 @@ test("la carga inicial no contiene collectionGroup", () => {
 
 test("define el universo productivo por Fecha Contabilizacion OT y no por IDs", () => {
   assert.match(source, /sap\.Fecha Contabilizacion OT/);
-  assert.match(source, /2026-01-01/);
+  assert.match(source, /2025-01-01/);
   assert.match(source, /2027-01-01/);
   assert.doesNotMatch(source, /Prod_DocEntry\s*[>=<]/);
 });

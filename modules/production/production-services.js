@@ -15,7 +15,7 @@ async function getProductionFirestore() {
   return productionFirestore;
 }
 
-const PRODUCTION_PERIOD_START = "2026-01-01";
+const PRODUCTION_PERIOD_START = "2025-01-01";
 const PRODUCTION_PERIOD_END = "2027-01-01";
 
 async function getProductionOrdersPage(cursor = null, direction = "next") {
